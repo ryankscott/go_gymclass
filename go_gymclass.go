@@ -114,8 +114,8 @@ func translateName(className *string) {
 	}
 }
 
-// GetClasses will return a list of classes as stored by LesMills for the next 7 days when passing the relevant GymId
-func GetClasses(gym Gym) ([]GymClass, error) {
+// GetClasses will return a list of classes as stored by LesMills for the next 7 days when passing one or more Gyms
+func GetClasses(gyms []Gym) ([]GymClass, error) {
 
 	baseURL := "https://www.lesmills.co.nz/timetable-calander.ashx?club="
 
@@ -124,38 +124,39 @@ func GetClasses(gym Gym) ([]GymClass, error) {
 	parser := ics.New()
 	inputChan := parser.GetInputChan()
 
-	// Create the URL for the ICS based on the gym
-	inputChan <- baseURL + gym.ID
-	parser.Wait()
+	for _, gym := range gyms {
+		// Create the URL for the ICS based on the gym
+		inputChan <- baseURL + gym.ID
+		parser.Wait()
 
-	cal, err := parser.GetCalendars()
-	if err != nil {
-		log.WithFields(log.Fields{"value": err}).Error("Failed to get calendars")
-		return nil, err
-	}
-	var foundClass GymClass
-	for _, c := range cal {
-
-		loc, err := time.LoadLocation("Pacific/Auckland")
+		cal, err := parser.GetCalendars()
 		if err != nil {
-			log.WithFields(log.Fields{"value": err}).Error("Failed to get timezone")
+			log.WithFields(log.Fields{"value": err}).Error("Failed to get calendars")
 			return nil, err
 		}
-		c.SetTimezone(*loc)
-		for _, event := range c.GetEvents() {
-			name := event.GetSummary()
-			translateName(&name)
-			foundClass = GymClass{
-				Gym:           gym.Name,
-				Name:          name,
-				Location:      event.GetLocation(),
-				StartDateTime: event.GetStart(),
-				EndDateTime:   event.GetEnd(),
+		var foundClass GymClass
+		for _, c := range cal {
+
+			loc, err := time.LoadLocation("Pacific/Auckland")
+			if err != nil {
+				log.WithFields(log.Fields{"value": err}).Error("Failed to get timezone")
+				return nil, err
 			}
-			foundClasses = append(foundClasses, foundClass)
+			c.SetTimezone(*loc)
+			for _, event := range c.GetEvents() {
+				name := event.GetSummary()
+				translateName(&name)
+				foundClass = GymClass{
+					Gym:           gym.Name,
+					Name:          name,
+					Location:      event.GetLocation(),
+					StartDateTime: event.GetStart(),
+					EndDateTime:   event.GetEnd(),
+				}
+				foundClasses = append(foundClasses, foundClass)
+			}
 		}
 	}
-
 	sort.Sort(ByStartDateTime(foundClasses))
 	return foundClasses, nil
 }
