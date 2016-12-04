@@ -7,7 +7,7 @@ A package to help get and store gym classes.
 
 ## Usage
 
-```
+```go
 package main
 
 import (
