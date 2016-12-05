@@ -59,6 +59,7 @@ type GymClass struct {
 	Location      string    `json:"location" db:"location"`
 	StartDateTime time.Time `json:"startdatetime" db:"start_datetime"`
 	EndDateTime   time.Time `json:"enddatetime" db:"end_datetime"`
+	InsertTime    time.Time `json:"insertdatetime" db:"insert_datetime"`
 }
 
 // GymQuery describes a query for GymClasses
@@ -136,22 +137,25 @@ func GetClasses(gyms []Gym) ([]GymClass, error) {
 		}
 		var foundClass GymClass
 		for _, c := range cal {
-
 			loc, err := time.LoadLocation("Pacific/Auckland")
 			if err != nil {
 				log.WithFields(log.Fields{"value": err}).Error("Failed to get timezone")
 				return nil, err
 			}
-			c.SetTimezone(*loc)
 			for _, event := range c.GetEvents() {
+
+				start := event.GetStart()
+				end := event.GetEnd()
+				startDateTime := time.Date(start.Year(), start.Month(), start.Day(), start.Hour(), start.Minute(), start.Second(), 0, loc)
+				endDateTime := time.Date(end.Year(), end.Month(), end.Day(), end.Hour(), end.Minute(), end.Second(), 0, loc)
 				name := event.GetSummary()
 				translateName(&name)
 				foundClass = GymClass{
 					Gym:           gym.Name,
 					Name:          name,
 					Location:      event.GetLocation(),
-					StartDateTime: event.GetStart(),
-					EndDateTime:   event.GetEnd(),
+					StartDateTime: startDateTime,
+					EndDateTime:   endDateTime,
 				}
 				foundClasses = append(foundClasses, foundClass)
 			}
@@ -171,7 +175,9 @@ func StoreClasses(classes []GymClass, dbConfig *Config) error {
            class VARCHAR(45) NOT NULL,
            location VARCHAR(27) NOT NULL,
            start_datetime DATETIME NOT NULL,
-           end_datetime DATETIME NOT NULL);`
+           end_datetime DATETIME NOT NULL,
+           insert_datetime DATETIME NOT NULL);
+`
 
 	_, err := dbConfig.DB.Exec(createTable)
 	if err != nil {
@@ -192,11 +198,11 @@ func StoreClasses(classes []GymClass, dbConfig *Config) error {
 	// Save all classes
 	for _, class := range classes {
 		// Prepare insert query
-		stmt, err := dbConfig.DB.Prepare("INSERT OR IGNORE INTO timetable (gym, class, location, start_datetime, end_datetime) values(?, ?, ?, ?, ?)")
+		stmt, err := dbConfig.DB.Prepare("INSERT OR IGNORE INTO timetable (gym, class, location, start_datetime, end_datetime, insert_datetime) values(?, ?, ?, ?, ?, ?)")
 		if err != nil {
 			log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to create row")
 		}
-		_, err = stmt.Exec(class.Gym, class.Name, class.Location, class.StartDateTime, class.EndDateTime)
+		_, err = stmt.Exec(class.Gym, class.Name, class.Location, class.StartDateTime, class.EndDateTime, time.Now())
 		if err != nil {
 			log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to insert row")
 		}
