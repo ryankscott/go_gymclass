@@ -54,18 +54,18 @@ var Gyms = []Gym{
 
 // GymClass describes a class at Les Mills
 type GymClass struct {
-	Gym           string    `json:"gym" db:"gym"`
-	Name          string    `json:"name" db:"class"`
-	Location      string    `json:"location" db:"location"`
-	StartDateTime time.Time `json:"startdatetime" db:"start_datetime"`
-	EndDateTime   time.Time `json:"enddatetime" db:"end_datetime"`
-	InsertTime    time.Time `json:"insertdatetime" db:"insert_datetime"`
+	Gym            string    `json:"gym" db:"gym"`
+	Name           string    `json:"name" db:"class"`
+	Location       string    `json:"location" db:"location"`
+	StartDateTime  time.Time `json:"startdatetime" db:"start_datetime"`
+	EndDateTime    time.Time `json:"enddatetime" db:"end_datetime"`
+	InsertDateTime time.Time `json:"insertdatetime" db:"insert_datetime"`
 }
 
 // GymQuery describes a query for GymClasses
 type GymQuery struct {
 	Gym    Gym
-	Class  GymClass
+	Class  string
 	Before time.Time
 	After  time.Time
 	Limit  string
@@ -213,7 +213,6 @@ func StoreClasses(classes []GymClass, dbConfig *Config) error {
 
 // QueryClasses will query the classes from the stored database and return the results
 func QueryClasses(query GymQuery, dbConfig *Config) ([]GymClass, error) {
-	// Prepare the SELECT query
 	var err error
 	var stmt *sql.Stmt
 	stmt, err = dbConfig.DB.Prepare("SELECT * FROM timetable WHERE gym LIKE ? AND class LIKE ? and start_datetime > ? and start_datetime < ? limit ?")
@@ -224,7 +223,7 @@ func QueryClasses(query GymQuery, dbConfig *Config) ([]GymClass, error) {
 
 	// TODO: Refactor this
 	likeGym := "%" + query.Gym.Name + "%"
-	likeName := "%" + query.Class.Name + "%"
+	likeName := "%" + query.Class + "%"
 	rows, err := stmt.Query(
 		strings.ToLower(likeGym),
 		strings.ToLower(likeName),
@@ -236,7 +235,7 @@ func QueryClasses(query GymQuery, dbConfig *Config) ([]GymClass, error) {
 	var results []GymClass
 	for rows.Next() {
 		var result GymClass
-		err := rows.Scan(&result)
+		err := rows.Scan(&result.Gym, &result.Name, &result.Location, &result.StartDateTime, &result.EndDateTime, &result.InsertDateTime)
 		if err != nil {
 			log.WithFields(log.Fields{"error": err}).Error("Failed to marshal result")
 		}
@@ -245,4 +244,15 @@ func QueryClasses(query GymQuery, dbConfig *Config) ([]GymClass, error) {
 	}
 	sort.Sort(ByStartDateTime(results))
 	return results, nil
+}
+
+// GetGymByName returns a Gym based on the name provided
+func GetGymByName(name string) Gym {
+	for _, gym := range Gyms {
+		if name == gym.Name {
+			return gym
+		}
+	}
+	log.WithFields(log.Fields{"name": name}).Info("Unable to find gym")
+	return Gym{}
 }
