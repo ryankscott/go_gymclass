@@ -2,12 +2,16 @@ package lm
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/PuloV/ics-golang"
 	log "github.com/Sirupsen/logrus"
+	"github.com/jsgoecke/go-wit"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -52,7 +56,7 @@ var Gyms = []Gym{
 	Gym{"newmarket", "b6aa431c-ce1a-e511-a02f-0050568522bb"},
 }
 
-// GymClass describes a class at Les Mills
+// Gymclass describes a class at Les Mills
 type GymClass struct {
 	Gym            string    `json:"gym" db:"gym"`
 	Name           string    `json:"name" db:"class"`
@@ -115,12 +119,39 @@ func translateName(className *string) {
 	}
 }
 
+func parseICS(cal *ics.Calendar, gym Gym) ([]GymClass, error) {
+	log.Infof("Parsing ICS file for %s", gym.Name)
+	var foundClasses []GymClass
+	var foundClass GymClass
+	loc, err := time.LoadLocation("Pacific/Auckland")
+	if err != nil {
+		log.WithFields(log.Fields{"value": err}).Error("Failed to get timezone")
+		return []GymClass{}, err
+	}
+	for _, event := range cal.GetEvents() {
+		start := event.GetStart()
+		end := event.GetEnd()
+		startDateTime := time.Date(start.Year(), start.Month(), start.Day(), start.Hour(), start.Minute(), start.Second(), 0, loc)
+		endDateTime := time.Date(end.Year(), end.Month(), end.Day(), end.Hour(), end.Minute(), end.Second(), 0, loc)
+		name := event.GetSummary()
+		translateName(&name)
+		foundClass = GymClass{
+			Gym:           gym.Name,
+			Name:          name,
+			Location:      event.GetLocation(),
+			StartDateTime: startDateTime,
+			EndDateTime:   endDateTime,
+		}
+		foundClasses = append(foundClasses, foundClass)
+	}
+	return foundClasses, nil
+}
+
 // GetClasses will return a list of classes as stored by LesMills for the next 7 days when passing one or more Gyms
 func GetClasses(gyms []Gym) ([]GymClass, error) {
 
 	baseURL := "https://www.lesmills.co.nz/timetable-calander.ashx?club="
-
-	var foundClasses = []GymClass{}
+	var foundClasses []GymClass
 
 	parser := ics.New()
 	inputChan := parser.GetInputChan()
@@ -128,38 +159,22 @@ func GetClasses(gyms []Gym) ([]GymClass, error) {
 	for _, gym := range gyms {
 		// Create the URL for the ICS based on the gym
 		inputChan <- baseURL + gym.ID
-		parser.Wait()
-
-		cal, err := parser.GetCalendars()
+		log.Infof("Getting classes for %s from %s", gym.Name, baseURL+gym.ID)
+	}
+	parser.Wait()
+	cal, err := parser.GetCalendars()
+	if err != nil {
+		log.WithFields(log.Fields{"value": err}).Error("Failed to get calendars")
+		return nil, err
+	}
+	for _, c := range cal {
+		gym := GetGymByID(strings.Split(c.GetUrl(), baseURL)[1])
+		classes, err := parseICS(c, gym)
 		if err != nil {
-			log.WithFields(log.Fields{"value": err}).Error("Failed to get calendars")
+			log.WithFields(log.Fields{"value": err}).Error("Failed to parse ICS")
 			return nil, err
 		}
-		var foundClass GymClass
-		for _, c := range cal {
-			loc, err := time.LoadLocation("Pacific/Auckland")
-			if err != nil {
-				log.WithFields(log.Fields{"value": err}).Error("Failed to get timezone")
-				return nil, err
-			}
-			for _, event := range c.GetEvents() {
-
-				start := event.GetStart()
-				end := event.GetEnd()
-				startDateTime := time.Date(start.Year(), start.Month(), start.Day(), start.Hour(), start.Minute(), start.Second(), 0, loc)
-				endDateTime := time.Date(end.Year(), end.Month(), end.Day(), end.Hour(), end.Minute(), end.Second(), 0, loc)
-				name := event.GetSummary()
-				translateName(&name)
-				foundClass = GymClass{
-					Gym:           gym.Name,
-					Name:          name,
-					Location:      event.GetLocation(),
-					StartDateTime: startDateTime,
-					EndDateTime:   endDateTime,
-				}
-				foundClasses = append(foundClasses, foundClass)
-			}
-		}
+		foundClasses = append(foundClasses, classes...)
 	}
 	sort.Sort(ByStartDateTime(foundClasses))
 	return foundClasses, nil
@@ -211,6 +226,122 @@ func StoreClasses(classes []GymClass, dbConfig *Config) error {
 	return nil
 }
 
+// QueryClassesByName will take a query string and try parse out the correct query and return the results
+func QueryClassesByName(query string, dbConfig *Config) ([]GymClass, error) {
+	log.Infof("Querying wit.ai for '%s'", query)
+	accessToken := os.Getenv("WIT_ACCESS_TOKEN")
+	if accessToken == "" {
+		log.Error("Failed to get access token from environment vars")
+		return []GymClass{}, errors.New("No access token found for Wit.ai, please set the environment variable WIT_ACCESS_TOKEN")
+	}
+	client := wit.NewClient(accessToken)
+	request := &wit.MessageRequest{}
+	request.Query = query
+	result, err := client.Message(request)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Failed to query wit.ai")
+		return []GymClass{}, errors.New("Failed to query wit.ai")
+	}
+
+	var classes []GymClass
+	if len(result.Outcomes) >= 1 {
+		outcome := result.Outcomes[0]
+		class := outcome.Entities["agenda_entry"]
+		datetime := outcome.Entities["datetime"]
+		location := outcome.Entities["location"]
+
+		gymQuery := GymQuery{}
+
+		if len(location) >= 1 {
+			gymName := fmt.Sprintf("%v", *location[0].Value)
+			gymQuery.Gym = GetGymByName(gymName)
+		} else {
+			gymQuery.Gym = Gym{}
+		}
+		if len(class) >= 1 {
+			cls := fmt.Sprintf("%v", *class[0].Value)
+			cla := strings.Split(cls, " ")
+			if len(cla) > 0 {
+				gymQuery.Class = cla[0]
+			} else {
+				gymQuery.Class = cls
+			}
+		} else {
+			gymQuery.Class = ""
+		}
+		if len(datetime) >= 1 {
+			// If it is a date range
+			if *datetime[0].Type == "interval" {
+				if datetime[0].From != nil {
+					after, err := time.Parse("2006-01-02T15:04:05Z07:00", datetime[0].From.Value)
+					if err != nil {
+						gymQuery.After = time.Now()
+					} else {
+						gymQuery.After = after
+					}
+				} else {
+					gymQuery.After = time.Now().AddDate(0, 0, 0)
+				}
+				if datetime[0].To != nil {
+					before, err := time.Parse("2006-01-02T15:04:05Z07:00", datetime[0].To.Value)
+					if err != nil {
+						gymQuery.Before = time.Now().AddDate(0, 0, 1)
+					} else {
+						gymQuery.Before = before
+					}
+				} else {
+					gymQuery.Before = time.Now().AddDate(0, 0, 1)
+
+				}
+				log.Infof("Received a date interval parsing %v to %v as range %s to %s", datetime[0].From, datetime[0].To, gymQuery.After, gymQuery.Before)
+
+				// Else if it's just a value
+			} else if *datetime[0].Type == "value" {
+				if *datetime[0].Grain == "day" {
+					dateVal := (*datetime[0].Value).(string)
+					after, err := time.Parse("2006-01-02T15:04:05Z07:00", dateVal)
+					if err != nil {
+						gymQuery.After = time.Now()
+					} else {
+						gymQuery.After = after
+					}
+					gymQuery.Before = after.AddDate(0, 0, 1)
+				} else if *datetime[0].Grain == "week" {
+					dateVal := (*datetime[0].Value).(string)
+					after, err := time.Parse("2006-01-02T15:04:05Z07:00", dateVal)
+					if err != nil {
+						gymQuery.After = time.Now()
+					} else {
+						gymQuery.After = after
+					}
+					gymQuery.Before = after.AddDate(0, 0, 7)
+				} else {
+					gymQuery.After = time.Now()
+					gymQuery.Before = time.Now().AddDate(0, 0, 7)
+				}
+				log.Infof("Received a date with grain '%v' parsing %s as range %v to %v", *datetime[0].Grain, (*datetime[0].Value).(string), gymQuery.After, gymQuery.Before)
+			}
+		} else {
+			gymQuery.After = time.Now().AddDate(0, 0, 0)
+			gymQuery.Before = time.Now().AddDate(0, 0, 7)
+			log.Infof("Couldn't find a datetime so parsing as range %v to %v", gymQuery.After, gymQuery.Before)
+		}
+
+		gymQuery.Limit = "-1"
+		classes, err = QueryClasses(gymQuery, dbConfig)
+		if err != nil {
+			log.WithFields(log.Fields{"error": err}).Error("Failed to find classes")
+			return []GymClass{}, errors.New("Failed to find classes")
+		}
+	} else {
+		log.Info("Failed to get a response from wit.ai")
+		classes := []GymClass{}
+		return classes, errors.New("Failed to find any classes")
+	}
+
+	return classes, nil
+}
+
 // QueryClasses will query the classes from the stored database and return the results
 func QueryClasses(query GymQuery, dbConfig *Config) ([]GymClass, error) {
 	var err error
@@ -231,7 +362,7 @@ func QueryClasses(query GymQuery, dbConfig *Config) ([]GymClass, error) {
 		query.Before,
 		query.Limit,
 	)
-
+	log.Infof("Executing query with args gym: %s class: %s, start_datetime: %s, end_datetime: %s limit %s", likeGym, likeName, query.After, query.Before, query.Limit)
 	var results []GymClass
 	for rows.Next() {
 		var result GymClass
@@ -242,6 +373,7 @@ func QueryClasses(query GymQuery, dbConfig *Config) ([]GymClass, error) {
 		translateName(&result.Name)
 		results = append(results, result)
 	}
+	log.Infof("Returning %d gym classes", len(results))
 	sort.Sort(ByStartDateTime(results))
 	return results, nil
 }
@@ -254,5 +386,16 @@ func GetGymByName(name string) Gym {
 		}
 	}
 	log.WithFields(log.Fields{"name": name}).Info("Unable to find gym")
+	return Gym{}
+}
+
+// GetGymByID returns a Gym based on the ID provided
+func GetGymByID(ID string) Gym {
+	for _, gym := range Gyms {
+		if ID == gym.ID {
+			return gym
+		}
+	}
+	log.WithFields(log.Fields{"ID": ID}).Info("Unable to find gym")
 	return Gym{}
 }
