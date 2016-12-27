@@ -243,7 +243,7 @@ func QueryClassesByName(query string, dbConfig *Config) ([]GymClass, error) {
 		return []GymClass{}, errors.New("Failed to query wit.ai")
 	}
 
-	var classes []GymClass
+	classes := make([]GymClass, 0)
 	if len(result.Outcomes) >= 1 {
 		outcome := result.Outcomes[0]
 		class := outcome.Entities["agenda_entry"]
@@ -363,7 +363,7 @@ func QueryClasses(query GymQuery, dbConfig *Config) ([]GymClass, error) {
 		query.Limit,
 	)
 	log.Infof("Executing query with args gym: %s class: %s, start_datetime: %s, end_datetime: %s limit %s", likeGym, likeName, query.After, query.Before, query.Limit)
-	var results []GymClass
+	results := make([]GymClass, 0)
 	for rows.Next() {
 		var result GymClass
 		err := rows.Scan(&result.Gym, &result.Name, &result.Location, &result.StartDateTime, &result.EndDateTime, &result.InsertDateTime)
