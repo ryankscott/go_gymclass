@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/PuloV/ics-golang"
+	"github.com/satori/go.uuid"
 )
 
 // func TestNewConfigDefault(t *testing.T) {
@@ -85,5 +86,23 @@ func TestParseICS(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestStoreClasses(t *testing.T) {
+	testConfig, err := NewConfig()
+	if err != nil {
+		t.Errorf("Failed to create database %s", err)
+	}
+	loc, _ := time.LoadLocation("Pacific/Auckland")
+	classes := []GymClass{
+		{UUID: uuid.NewV1(), Gym: "city", Name: "BODYPUMP", Location: "Studio 1", StartDateTime: time.Date(2016, 12, 18, 8, 10, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 10, 0, 0, loc), InsertDateTime: time.Time{}},
+		{UUID: uuid.NewV1(), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(2016, 12, 18, 8, 20, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 05, 0, 0, loc), InsertDateTime: time.Time{}},
+		{UUID: uuid.NewV1(), Gym: "city", Name: "CXWORX", Location: "Studio 2", StartDateTime: time.Date(2016, 12, 18, 9, 0, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 30, 0, 0, loc), InsertDateTime: time.Time{}},
+		{UUID: uuid.NewV1(), Gym: "city", Name: "BODYBALANCE", Location: "Studio 1", StartDateTime: time.Date(2016, 12, 18, 9, 10, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 10, 10, 0, 0, loc), InsertDateTime: time.Time{}},
+		{UUID: uuid.NewV1(), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(2016, 12, 18, 9, 20, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 10, 20, 0, 0, loc), InsertDateTime: time.Time{}}}
+	err = StoreClasses(classes, testConfig)
+	if err != nil {
+		t.Errorf("Error when storing classes %s", err)
 	}
 }

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	uuid "github.com/satori/go.uuid"
+
 	"github.com/PuloV/ics-golang"
 	log "github.com/Sirupsen/logrus"
 	"github.com/jsgoecke/go-wit"
@@ -56,8 +58,9 @@ var Gyms = []Gym{
 	Gym{"newmarket", "b6aa431c-ce1a-e511-a02f-0050568522bb"},
 }
 
-// Gymclass describes a class at Les Mills
+// GymClass describes a class at Les Mills
 type GymClass struct {
+	UUID           uuid.UUID `json:"uuid" db:"uuid"`
 	Gym            string    `json:"gym" db:"gym"`
 	Name           string    `json:"name" db:"class"`
 	Location       string    `json:"location" db:"location"`
@@ -186,6 +189,7 @@ func StoreClasses(classes []GymClass, dbConfig *Config) error {
 	// Create table
 	createTable := `
         CREATE TABLE IF NOT EXISTS timetable (
+		   uuid VARCHAR(45) PRIMARY KEY,
            gym VARCHAR(9) NOT NULL,
            class VARCHAR(45) NOT NULL,
            location VARCHAR(27) NOT NULL,
@@ -212,14 +216,17 @@ func StoreClasses(classes []GymClass, dbConfig *Config) error {
 
 	// Save all classes
 	for _, class := range classes {
+
 		// Prepare insert query
-		stmt, err := dbConfig.DB.Prepare("INSERT OR IGNORE INTO timetable (gym, class, location, start_datetime, end_datetime, insert_datetime) values(?, ?, ?, ?, ?, ?)")
+		stmt, err := dbConfig.DB.Prepare("INSERT OR IGNORE INTO timetable (uuid, gym, class, location, start_datetime, end_datetime, insert_datetime) values(?, ?, ?, ?, ?, ?, ?)")
 		if err != nil {
 			log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to create row")
+			return err
 		}
-		_, err = stmt.Exec(class.Gym, class.Name, class.Location, class.StartDateTime, class.EndDateTime, time.Now())
+		_, err = stmt.Exec(uuid.NewV1().String(), class.Gym, class.Name, class.Location, class.StartDateTime, class.EndDateTime, time.Now())
 		if err != nil {
 			log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to insert row")
+			return err
 		}
 
 	}
