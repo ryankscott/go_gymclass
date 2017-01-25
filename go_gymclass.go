@@ -17,6 +17,10 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// TODO:
+//  - Implement QueryUserClasses
+//  - Test
+
 // Config is used to store DB configuration for storing data
 type Config struct {
 	DBDriver   string
@@ -62,11 +66,17 @@ var Gyms = []Gym{
 type GymClass struct {
 	UUID           uuid.UUID `json:"uuid" db:"uuid"`
 	Gym            string    `json:"gym" db:"gym"`
-	Name           string    `json:"name" db:"class"`
+	Name           string    `json:"name" db:"name"`
 	Location       string    `json:"location" db:"location"`
 	StartDateTime  time.Time `json:"startdatetime" db:"start_datetime"`
 	EndDateTime    time.Time `json:"enddatetime" db:"end_datetime"`
 	InsertDateTime time.Time `json:"insertdatetime" db:"insert_datetime"`
+}
+
+// UserGymClass describes a saved GymClass by a user
+type UserGymClass struct {
+	user       string    `json:"user" db:"user"`
+	gymClassId uuid.UUID `json:"gymClassUUID" db:"gymclass_uiid"`
 }
 
 // GymQuery describes a query for GymClasses
@@ -188,10 +198,10 @@ func StoreClasses(classes []GymClass, dbConfig *Config) error {
 
 	// Create table
 	createTable := `
-        CREATE TABLE IF NOT EXISTS timetable (
+        CREATE TABLE IF NOT EXISTS class (
 		   uuid VARCHAR(45) PRIMARY KEY,
            gym VARCHAR(9) NOT NULL,
-           class VARCHAR(45) NOT NULL,
+           name VARCHAR(45) NOT NULL,
            location VARCHAR(27) NOT NULL,
            start_datetime DATETIME NOT NULL,
            end_datetime DATETIME NOT NULL,
@@ -206,7 +216,7 @@ func StoreClasses(classes []GymClass, dbConfig *Config) error {
 
 	// Create index on table
 	indexTable := `
-	CREATE UNIQUE INDEX IF NOT EXISTS unique_class ON timetable(gym, location, start_datetime);`
+	CREATE UNIQUE INDEX IF NOT EXISTS unique_class ON class(gym, location, start_datetime);`
 
 	_, err = dbConfig.DB.Exec(indexTable)
 	if err != nil {
@@ -218,7 +228,7 @@ func StoreClasses(classes []GymClass, dbConfig *Config) error {
 	for _, class := range classes {
 
 		// Prepare insert query
-		stmt, err := dbConfig.DB.Prepare("INSERT OR IGNORE INTO timetable (uuid, gym, class, location, start_datetime, end_datetime, insert_datetime) values(?, ?, ?, ?, ?, ?, ?)")
+		stmt, err := dbConfig.DB.Prepare("INSERT OR IGNORE INTO class (uuid, gym, name, location, start_datetime, end_datetime, insert_datetime) values(?, ?, ?, ?, ?, ?, ?)")
 		if err != nil {
 			log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to create row")
 			return err
@@ -230,6 +240,72 @@ func StoreClasses(classes []GymClass, dbConfig *Config) error {
 		}
 
 	}
+	return nil
+}
+
+// QueryUserClasses will return a list of classes that a particular user has saved
+func QueryUserClasses(user string, dbConfig *Config) ([]GymClass, error) {
+	var err error
+	var stmt *sql.Stmt
+	stmt, err = dbConfig.DB.Prepare("SELECT c.* FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ?")
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Failed to prepare select statement")
+		return []GymClass{}, err
+	}
+	log.Infof("Executing query with args user: %s", user)
+	rows, err := stmt.Query(user)
+	results := make([]GymClass, 0)
+	for rows.Next() {
+		var result GymClass
+		err := rows.Scan(&result.UUID, &result.Gym, &result.Name, &result.Location, &result.StartDateTime, &result.EndDateTime, &result.InsertDateTime)
+		if err != nil {
+			log.WithFields(log.Fields{"error": err}).Error("Failed to marshal result")
+		}
+		results = append(results, result)
+	}
+	log.Infof("Returning %d gym classes", len(results))
+	sort.Sort(ByStartDateTime(results))
+	return results, nil
+}
+
+// StoreUserClass will store a class against a user in the database
+func StoreUserClass(user string, class GymClass, dbConfig *Config) error {
+
+	// Create table
+	createTable := `
+	        CREATE TABLE IF NOT EXISTS user_class (
+			   user VARCHAR(45) NOT NULL,
+	           class_id VARCHAR(45) NOT NULL);
+	`
+
+	_, err := dbConfig.DB.Exec(createTable)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Failed to create table")
+		return err
+	}
+
+	// Create index on table
+	indexTable := `
+		CREATE UNIQUE INDEX IF NOT EXISTS unique_user_class ON user_class(user, class_id);`
+
+	_, err = dbConfig.DB.Exec(indexTable)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Failed to index table")
+		return err
+	}
+
+	// Prepare insert query
+	stmt, err := dbConfig.DB.Prepare("INSERT OR IGNORE INTO user_class (user, class_id) values(?, ?)")
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to create row")
+		return err
+	}
+	_, err = stmt.Exec(user, class.UUID)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to insert row")
+		return err
+	}
+
 	return nil
 }
 
@@ -353,7 +429,7 @@ func QueryClassesByName(query string, dbConfig *Config) ([]GymClass, error) {
 func QueryClasses(query GymQuery, dbConfig *Config) ([]GymClass, error) {
 	var err error
 	var stmt *sql.Stmt
-	stmt, err = dbConfig.DB.Prepare("SELECT * FROM timetable WHERE gym LIKE ? AND class LIKE ? and start_datetime > ? and start_datetime < ? limit ?")
+	stmt, err = dbConfig.DB.Prepare("SELECT * FROM class WHERE gym LIKE ? AND name LIKE ? and start_datetime > ? and start_datetime < ? limit ?")
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to prepare select statement")
 		return []GymClass{}, err
@@ -369,11 +445,11 @@ func QueryClasses(query GymQuery, dbConfig *Config) ([]GymClass, error) {
 		query.Before,
 		query.Limit,
 	)
-	log.Infof("Executing query with args gym: %s class: %s, start_datetime: %s, end_datetime: %s limit %s", likeGym, likeName, query.After, query.Before, query.Limit)
+	log.Infof("Executing query with args gym: %s name: %s, start_datetime: %s, end_datetime: %s limit %s", likeGym, likeName, query.After, query.Before, query.Limit)
 	results := make([]GymClass, 0)
 	for rows.Next() {
 		var result GymClass
-		err := rows.Scan(&result.Gym, &result.Name, &result.Location, &result.StartDateTime, &result.EndDateTime, &result.InsertDateTime)
+		err := rows.Scan(&result.UUID, &result.Gym, &result.Name, &result.Location, &result.StartDateTime, &result.EndDateTime, &result.InsertDateTime)
 		if err != nil {
 			log.WithFields(log.Fields{"error": err}).Error("Failed to marshal result")
 		}
