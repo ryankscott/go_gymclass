@@ -151,7 +151,6 @@ func TestStoreUserClass(t *testing.T) {
 		t.Errorf("Failed to create database %s", err)
 	}
 	allClasses, _ := QueryClasses(GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, loc), After: time.Date(2000, 0, 0, 0, 0, 0, 0, loc), Limit: "100"}, testConfig)
-	fmt.Println(len(allClasses))
 
 	storeUserClassTests := []storeUserClassTest{
 		{"123", allClasses[0]},
@@ -160,7 +159,7 @@ func TestStoreUserClass(t *testing.T) {
 		{"456", allClasses[3]},
 	}
 	for _, test := range storeUserClassTests {
-		err := StoreUserClass(test.user, test.class, testConfig)
+		err := StoreUserClass(test.user, test.class.UUID, testConfig)
 		if err != nil {
 			t.Errorf("Failed to store user class %s", err)
 		}
@@ -191,6 +190,36 @@ func TestQueryUserClasses(t *testing.T) {
 		fmt.Println(actualClasses)
 		if len(actualClasses) != test.expectedClassCount {
 			t.Errorf("Did not get expected number of user classes got %d but expected %d", len(actualClasses), test.expectedClassCount)
+		}
+	}
+
+}
+
+type deleteUserClassTest struct {
+	user  string
+	class GymClass
+}
+
+func TestDeleteUserClass(t *testing.T) {
+	testConfig, err := NewConfig()
+
+	if err != nil {
+		t.Errorf("Failed to create database %s", err)
+	}
+
+	allClasses, _ := QueryClasses(GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, loc), After: time.Date(2000, 0, 0, 0, 0, 0, 0, loc), Limit: "100"}, testConfig)
+	fmt.Println(len(allClasses))
+
+	deleteUserClassTests := []deleteUserClassTest{
+		{"123", allClasses[0]},
+		{"123", allClasses[1]},
+		{"123", allClasses[2]},
+		{"456", allClasses[3]},
+	}
+	for _, test := range deleteUserClassTests {
+		err := DeleteUserClass(test.user, test.class.UUID, testConfig)
+		if err != nil {
+			t.Errorf("Failed to get user classes %s", err)
 		}
 	}
 

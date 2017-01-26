@@ -269,7 +269,7 @@ func QueryUserClasses(user string, dbConfig *Config) ([]GymClass, error) {
 }
 
 // StoreUserClass will store a class against a user in the database
-func StoreUserClass(user string, class GymClass, dbConfig *Config) error {
+func StoreUserClass(user string, classID uuid.UUID, dbConfig *Config) error {
 
 	// Create table
 	createTable := `
@@ -294,15 +294,54 @@ func StoreUserClass(user string, class GymClass, dbConfig *Config) error {
 		return err
 	}
 
-	// Prepare insert query
-	stmt, err := dbConfig.DB.Prepare("INSERT OR IGNORE INTO user_class (user, class_id) values(?, ?)")
+	// Check if that GymClass does actually exit
+	stmt, err := dbConfig.DB.Prepare("SELECT COUNT(*) FROM class WHERE uuid = ?")
 	if err != nil {
-		log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to create row")
+		log.WithFields(log.Fields{"error": err}).Error("Failed to create search query")
 		return err
 	}
-	_, err = stmt.Exec(user, class.UUID)
+	row := stmt.QueryRow(classID)
 	if err != nil {
-		log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to insert row")
+		log.WithFields(log.Fields{"error": err}).Error("Failed to search for class")
+		return err
+	}
+
+	var classes int
+	err = row.Scan(&classes)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Failed to marshal result")
+	}
+	if classes != 1 {
+		log.WithFields(log.Fields{"class": classID, "returnedClasses": classes}).Error("Did not find exactly one class matching that ID")
+		return errors.New("Not exactly one class found with that ID")
+	}
+
+	// Prepare insert query
+	stmt, err = dbConfig.DB.Prepare("INSERT OR IGNORE INTO user_class (user, class_id) values(?, ?)")
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to create row")
+		return err
+	}
+	_, err = stmt.Exec(user, classID)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to insert row")
+		return err
+	}
+
+	return nil
+}
+
+// DeleteUserClass will delete a class for a particular user in the database
+func DeleteUserClass(user string, class uuid.UUID, dbConfig *Config) error {
+	// Prepare delete query
+	stmt, err := dbConfig.DB.Prepare("DELETE FROM user_class where user = ? and class_id = ?")
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to delete row")
+		return err
+	}
+	_, err = stmt.Exec(user, class)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to delete row")
 		return err
 	}
 
