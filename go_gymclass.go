@@ -317,7 +317,7 @@ func StoreUserClass(user string, classID uuid.UUID, dbConfig *Config) error {
 	}
 
 	// Prepare insert query
-	stmt, err = dbConfig.DB.Prepare("INSERT OR IGNORE INTO user_class (user, class_id) values(?, ?)")
+	stmt, err = dbConfig.DB.Prepare("INSERT INTO user_class (user, class_id) values(?, ?)")
 	if err != nil {
 		log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to create row")
 		return err
