@@ -62,6 +62,11 @@ var Gyms = []Gym{
 	Gym{"newmarket", "b6aa431c-ce1a-e511-a02f-0050568522bb"},
 }
 
+// Classes provides a list of all the support classes
+var Classes = []string{
+// TODO: IMPLEMENT ME
+}
+
 // GymClass describes a class at Les Mills
 type GymClass struct {
 	UUID           uuid.UUID `json:"uuid" db:"uuid"`
@@ -73,10 +78,58 @@ type GymClass struct {
 	InsertDateTime time.Time `json:"insertdatetime" db:"insert_datetime"`
 }
 
+// UserPreference describes a users preferences when going to the gym
+type UserPreference struct {
+	User           string    `json:"user" db:"user"`
+	TotalClasses   int       `json:"totalClasses" db:"total_classes"`
+	ClassesPerWeek float32   `json:"classesPerWeek" db:"classes_per_week"`
+	LastClassDate  time.Time `json:"lastClassDate" db:"last_class_date"`
+	PreferredGym   string    `json:"preferredGym" db:"preferred_gym"`
+	PreferredClass string    `json:"preferredClass" db:"preferred_class"`
+	PreferredTime  int       `json:"preferredTime" db:"preferred_time"`
+	PreferredDay   int       `json:"preferredDay" db:"preferred_day"`
+}
+
+// CompareUserPreferences compares two UserPreferences and returns true if they are the same
+func CompareUserPreferences(a UserPreference, b UserPreference) bool {
+	if a.ClassesPerWeek != b.ClassesPerWeek {
+		return false
+	}
+
+	if !a.LastClassDate.Equal(b.LastClassDate) {
+		return false
+	}
+
+	if a.PreferredClass != b.PreferredClass {
+		return false
+	}
+
+	if a.PreferredDay != b.PreferredDay {
+		return false
+	}
+
+	if a.PreferredGym != b.PreferredGym {
+		return false
+	}
+
+	if a.PreferredTime != b.PreferredTime {
+		return false
+	}
+
+	if a.TotalClasses != b.TotalClasses {
+		return false
+	}
+
+	if a.User != b.User {
+		return false
+	}
+	return true
+}
+
 // UserGymClass describes a saved GymClass by a user
 type UserGymClass struct {
-	user       string    `json:"user" db:"user"`
-	gymClassId uuid.UUID `json:"gymClassUUID" db:"gymclass_uiid"`
+	User       string    `json:"user" db:"user"`
+	GymClassID uuid.UUID `json:"gymClassUUID" db:"gymclass_uiid"`
 }
 
 // GymQuery describes a query for GymClasses
@@ -226,6 +279,7 @@ func StoreClasses(classes []GymClass, dbConfig *Config) error {
 
 	// Save all classes
 	for _, class := range classes {
+		time.Sleep(time.Millisecond)
 
 		// Prepare insert query
 		stmt, err := dbConfig.DB.Prepare("INSERT OR IGNORE INTO class (uuid, gym, name, location, start_datetime, end_datetime, insert_datetime) values(?, ?, ?, ?, ?, ?, ?)")
@@ -266,6 +320,57 @@ func QueryUserClasses(user string, dbConfig *Config) ([]GymClass, error) {
 	log.Infof("Returning %d gym classes", len(results))
 	sort.Sort(ByStartDateTime(results))
 	return results, nil
+}
+
+// QueryUserPreferences will return a users gym going preferences
+func QueryUserPreferences(user string, dbConfig *Config) (UserPreference, error) {
+
+	var preference UserPreference
+	queries := map[string]string{
+		"TotalClasses":  "SELECT count(*) from user_class WHERE user = ?",
+		"LastClassDate": "SELECT c.start_datetime FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? ORDER BY c.start_datetime desc LIMIT 1",
+		"Day":           "SELECT strftime('%w', start_datetime), count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY strftime('%w', start_datetime) ORDER BY cnt DESC LIMIT 1",
+		"Class":         "SELECT c.name, count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY c.name ORDER BY cnt DESC LIMIT 1",
+		"Gym":           "SELECT c.gym, count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY c.gym ORDER BY cnt DESC LIMIT 1",
+		"StartTime":     "SELECT strftime('%H', c.start_datetime), count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY strftime('%H', c.start_datetime) ORDER BY cnt DESC LIMIT 1",
+	}
+	for key, query := range queries {
+		stmt, err := dbConfig.DB.Prepare(query)
+		if err != nil {
+			log.WithFields(log.Fields{"error": err}).Error("Failed to prepare query")
+			return UserPreference{}, err
+		}
+
+		log.Infof("Executing query for %s with args user: %s", key, user)
+		row := stmt.QueryRow(user)
+		if err != nil {
+			log.WithFields(log.Fields{"error": err}).Error("Failed to query")
+			return UserPreference{}, err
+		}
+
+		switch key {
+		case "LastClassDate":
+			var lastClassDate string
+			row.Scan(&lastClassDate)
+			lastClassDateTime, err := time.Parse(time.RFC3339, lastClassDate)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to parse last class date")
+			}
+			preference.LastClassDate = lastClassDateTime
+		case "TotalClasses":
+			row.Scan(&preference.TotalClasses)
+		case "Day":
+			row.Scan(&preference.PreferredDay, nil)
+		case "Class":
+			row.Scan(&preference.PreferredClass, nil)
+		case "Gym":
+			row.Scan(&preference.PreferredGym, nil)
+		case "StartTime":
+			row.Scan(&preference.PreferredTime, nil)
+		}
+
+	}
+	return preference, nil
 }
 
 // StoreUserClass will store a class against a user in the database
@@ -468,7 +573,7 @@ func QueryClassesByName(query string, dbConfig *Config) ([]GymClass, error) {
 func QueryClasses(query GymQuery, dbConfig *Config) ([]GymClass, error) {
 	var err error
 	var stmt *sql.Stmt
-	stmt, err = dbConfig.DB.Prepare("SELECT * FROM class WHERE gym LIKE ? AND name LIKE ? and start_datetime > ? and start_datetime < ? limit ?")
+	stmt, err = dbConfig.DB.Prepare("SELECT * FROM class WHERE gym LIKE ? AND name LIKE ? and start_datetime > ? and start_datetime < ? ORDER BY uuid asc limit ?")
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to prepare select statement")
 		return []GymClass{}, err

@@ -1,7 +1,6 @@
 package lm
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -10,28 +9,13 @@ import (
 	"github.com/satori/go.uuid"
 )
 
-// func TestNewConfigDefault(t *testing.T) {
-// 	expected := Config{"sqlite3", "admin", "password", "./gym.db", nil}
-// 	db, _ := sql.Open(expected.DBDriver, expected.DBPath)
-// 	expected.DB = db
-// 	actual, err := NewConfig()
-// 	if err != nil {
-// 		t.Errorf("Got an error while creating config: %s", err)
-// 	}
-// 	spew.Dump(expected.DB)
-// 	spew.Dump(actual.DB)
-// 	if !reflect.DeepEqual(expected.DB, actual.DB) {
-// 		t.Errorf("Failed to create config expected: %s but got: %s", expected.DB, actual.DB)
-// 	}
-
-// }
 var loc, _ = time.LoadLocation("Pacific/Auckland")
 var testClasses = []GymClass{
 	{UUID: uuid.FromStringOrNil("2d50d47a-e355-11e6-ac91-5cf9388e20a4"), Gym: "city", Name: "BODYPUMP", Location: "Studio 1", StartDateTime: time.Date(2016, 12, 18, 8, 10, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 10, 0, 0, loc), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d50d480-e355-11e6-ac91-5cf9388e20a4"), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(2016, 12, 18, 8, 20, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 05, 0, 0, loc), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d50d483-e355-11e6-ac91-5cf9388e20a4"), Gym: "city", Name: "CXWORX", Location: "Studio 2", StartDateTime: time.Date(2016, 12, 18, 9, 0, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 30, 0, 0, loc), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d50d486-e355-11e6-ac91-5cf9388e20a4"), Gym: "city", Name: "BODYBALANCE", Location: "Studio 1", StartDateTime: time.Date(2016, 12, 18, 9, 10, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 10, 10, 0, 0, loc), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d56ed4a-e355-11e6-ac91-5cf9388e20a4"), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(2016, 12, 18, 9, 20, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 10, 20, 0, 0, loc), InsertDateTime: time.Time{}}}
+	{UUID: uuid.FromStringOrNil("2d50d480-e355-11e6-ac91-5cf9388e20a5"), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(2016, 12, 18, 8, 20, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 05, 0, 0, loc), InsertDateTime: time.Time{}},
+	{UUID: uuid.FromStringOrNil("2d50d483-e355-11e6-ac91-5cf9388e20a6"), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(2016, 12, 18, 9, 20, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 30, 0, 0, loc), InsertDateTime: time.Time{}},
+	{UUID: uuid.FromStringOrNil("2d50d486-e355-11e6-ac91-5cf9388e20a7"), Gym: "city", Name: "BODYBALANCE", Location: "Studio 1", StartDateTime: time.Date(2016, 12, 18, 19, 0, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 10, 10, 0, 0, loc), InsertDateTime: time.Time{}},
+	{UUID: uuid.FromStringOrNil("2d56ed4a-e355-11e6-ac91-5cf9388e20a8"), Gym: "city", Name: "CXWORX", Location: "Studio 2", StartDateTime: time.Date(2016, 12, 18, 9, 20, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 10, 20, 0, 0, loc), InsertDateTime: time.Time{}}}
 
 type parseICSTest struct {
 	icsPath  string
@@ -151,11 +135,11 @@ func TestStoreUserClass(t *testing.T) {
 		t.Errorf("Failed to create database %s", err)
 	}
 	allClasses, _ := QueryClasses(GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, loc), After: time.Date(2000, 0, 0, 0, 0, 0, 0, loc), Limit: "100"}, testConfig)
-
 	storeUserClassTests := []storeUserClassTest{
 		{"123", allClasses[0]},
 		{"123", allClasses[1]},
 		{"123", allClasses[2]},
+		{"123", allClasses[3]},
 		{"456", allClasses[3]},
 	}
 	for _, test := range storeUserClassTests {
@@ -178,7 +162,7 @@ func TestQueryUserClasses(t *testing.T) {
 		t.Errorf("Failed to create database %s", err)
 	}
 	queryUserClassTests := []queryUserClassTest{
-		{"123", 3},
+		{"123", 4},
 		{"456", 1},
 		{"789", 0},
 	}
@@ -187,12 +171,38 @@ func TestQueryUserClasses(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get user classes %s", err)
 		}
-		fmt.Println(actualClasses)
 		if len(actualClasses) != test.expectedClassCount {
 			t.Errorf("Did not get expected number of user classes got %d but expected %d", len(actualClasses), test.expectedClassCount)
 		}
 	}
 
+}
+
+type queryUserPreferencesTest struct {
+	user       string
+	preference UserPreference
+}
+
+func TestQueryUserPreferences(t *testing.T) {
+	testConfig, err := NewConfig()
+
+	if err != nil {
+		t.Errorf("Failed to create database %s", err)
+	}
+	queryUserPreferencesTests := []queryUserPreferencesTest{
+		{"123", UserPreference{PreferredGym: "city", PreferredClass: "RPM", PreferredTime: 19, TotalClasses: 4, PreferredDay: 6, LastClassDate: time.Date(2016, 12, 18, 9, 20, 0, 0, loc)}},
+	}
+
+	for _, test := range queryUserPreferencesTests {
+		preference, err := QueryUserPreferences(test.user, testConfig)
+		if err != nil {
+			t.Errorf("Failed to get favourite class for user %s", err)
+		}
+
+		if !CompareUserPreferences(preference, test.preference) {
+			t.Errorf("Did not get expected result got: \n %+v  \nbut expected:\n %+v", preference, test.preference)
+		}
+	}
 }
 
 type deleteUserClassTest struct {
@@ -207,13 +217,14 @@ func TestDeleteUserClass(t *testing.T) {
 		t.Errorf("Failed to create database %s", err)
 	}
 
-	allClasses, _ := QueryClasses(GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, loc), After: time.Date(2000, 0, 0, 0, 0, 0, 0, loc), Limit: "100"}, testConfig)
-	fmt.Println(len(allClasses))
+	allClasses, _ := QueryClasses(GymQuery{
+		Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, loc), After: time.Date(2000, 0, 0, 0, 0, 0, 0, loc), Limit: "100"}, testConfig)
 
 	deleteUserClassTests := []deleteUserClassTest{
 		{"123", allClasses[0]},
 		{"123", allClasses[1]},
 		{"123", allClasses[2]},
+		{"123", allClasses[3]},
 		{"456", allClasses[3]},
 	}
 	for _, test := range deleteUserClassTests {
