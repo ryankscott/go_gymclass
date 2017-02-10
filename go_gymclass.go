@@ -18,8 +18,6 @@ import (
 )
 
 // TODO:
-//  - Implement QueryUserClasses
-//  - Test
 
 // Config is used to store DB configuration for storing data
 type Config struct {
@@ -88,42 +86,6 @@ type UserPreference struct {
 	PreferredClass string    `json:"preferredClass" db:"preferred_class"`
 	PreferredTime  int       `json:"preferredTime" db:"preferred_time"`
 	PreferredDay   int       `json:"preferredDay" db:"preferred_day"`
-}
-
-// CompareUserPreferences compares two UserPreferences and returns true if they are the same
-func CompareUserPreferences(a UserPreference, b UserPreference) bool {
-	if a.ClassesPerWeek != b.ClassesPerWeek {
-		return false
-	}
-
-	if !a.LastClassDate.Equal(b.LastClassDate) {
-		return false
-	}
-
-	if a.PreferredClass != b.PreferredClass {
-		return false
-	}
-
-	if a.PreferredDay != b.PreferredDay {
-		return false
-	}
-
-	if a.PreferredGym != b.PreferredGym {
-		return false
-	}
-
-	if a.PreferredTime != b.PreferredTime {
-		return false
-	}
-
-	if a.TotalClasses != b.TotalClasses {
-		return false
-	}
-
-	if a.User != b.User {
-		return false
-	}
-	return true
 }
 
 // UserGymClass describes a saved GymClass by a user
@@ -327,12 +289,13 @@ func QueryUserPreferences(user string, dbConfig *Config) (UserPreference, error)
 
 	var preference UserPreference
 	queries := map[string]string{
-		"TotalClasses":  "SELECT count(*) from user_class WHERE user = ?",
-		"LastClassDate": "SELECT c.start_datetime FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? ORDER BY c.start_datetime desc LIMIT 1",
-		"Day":           "SELECT strftime('%w', start_datetime), count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY strftime('%w', start_datetime) ORDER BY cnt DESC LIMIT 1",
-		"Class":         "SELECT c.name, count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY c.name ORDER BY cnt DESC LIMIT 1",
-		"Gym":           "SELECT c.gym, count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY c.gym ORDER BY cnt DESC LIMIT 1",
-		"StartTime":     "SELECT strftime('%H', c.start_datetime), count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY strftime('%H', c.start_datetime) ORDER BY cnt DESC LIMIT 1",
+		"TotalClasses":   "SELECT count(*) from user_class WHERE user = ?",
+		"LastClassDate":  "SELECT c.start_datetime FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? ORDER BY c.start_datetime DESC LIMIT 1",
+		"ClassesPerWeek": "SELECT 7*count(*)/(SELECT julianday(datetime()) - julianday(max(c.start_datetime)) from class c INNER JOIN user_class uc ON uc.class_id = c.uuid) from user_class uc where uc.user = ?",
+		"Day":            "SELECT strftime('%w', start_datetime), count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY strftime('%w', start_datetime) ORDER BY cnt DESC LIMIT 1",
+		"Class":          "SELECT c.name, count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY c.name ORDER BY cnt DESC LIMIT 1",
+		"Gym":            "SELECT c.gym, count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY c.gym ORDER BY cnt DESC LIMIT 1",
+		"StartTime":      "SELECT strftime('%H', c.start_datetime), count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY strftime('%H', c.start_datetime) ORDER BY cnt DESC LIMIT 1",
 	}
 	for key, query := range queries {
 		stmt, err := dbConfig.DB.Prepare(query)
@@ -350,23 +313,47 @@ func QueryUserPreferences(user string, dbConfig *Config) (UserPreference, error)
 
 		switch key {
 		case "LastClassDate":
-			var lastClassDate string
-			row.Scan(&lastClassDate)
-			lastClassDateTime, err := time.Parse(time.RFC3339, lastClassDate)
+			err := row.Scan(&preference.LastClassDate)
 			if err != nil {
 				log.WithFields(log.Fields{"error": err}).Error("Failed to parse last class date")
 			}
-			preference.LastClassDate = lastClassDateTime
+			// var lastClassDate string
+			// row.Scan(&lastClassDate)
+			// lastClassDateTime, err := time.Parse(time.RFC3339, lastClassDate)
+			// if err != nil {
+			// 	log.WithFields(log.Fields{"error": err}).Error("Failed to parse last class date")
+			// }
+			// preference.LastClassDate = lastClassDateTime
 		case "TotalClasses":
-			row.Scan(&preference.TotalClasses)
+			err := row.Scan(&preference.TotalClasses)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to parse total classes")
+			}
 		case "Day":
-			row.Scan(&preference.PreferredDay, nil)
+			err := row.Scan(&preference.PreferredDay, nil)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to parse preferred day")
+			}
 		case "Class":
-			row.Scan(&preference.PreferredClass, nil)
+			err := row.Scan(&preference.PreferredClass, nil)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to parse preferred class")
+			}
 		case "Gym":
-			row.Scan(&preference.PreferredGym, nil)
+			err := row.Scan(&preference.PreferredGym, nil)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to parse preferred gym")
+			}
 		case "StartTime":
-			row.Scan(&preference.PreferredTime, nil)
+			err := row.Scan(&preference.PreferredTime, nil)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to parse preferred time")
+			}
+		case "ClassesPerWeek":
+			err := row.Scan(&preference.ClassesPerWeek)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to parse classes per week")
+			}
 		}
 
 	}

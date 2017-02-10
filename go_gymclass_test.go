@@ -9,6 +9,38 @@ import (
 	"github.com/satori/go.uuid"
 )
 
+func compareUserPreferences(a UserPreference, b UserPreference) bool {
+	if !a.LastClassDate.Equal(b.LastClassDate) {
+		return false
+	}
+
+	if a.PreferredClass != b.PreferredClass {
+		return false
+	}
+
+	if a.PreferredDay != b.PreferredDay {
+		return false
+	}
+
+	if a.PreferredGym != b.PreferredGym {
+		return false
+	}
+
+	if a.PreferredTime != b.PreferredTime {
+		return false
+	}
+
+	if a.TotalClasses != b.TotalClasses {
+		return false
+	}
+
+	if a.User != b.User {
+		return false
+	}
+
+	return true
+}
+
 var loc, _ = time.LoadLocation("Pacific/Auckland")
 var testClasses = []GymClass{
 	{UUID: uuid.FromStringOrNil("2d50d47a-e355-11e6-ac91-5cf9388e20a4"), Gym: "city", Name: "BODYPUMP", Location: "Studio 1", StartDateTime: time.Date(2016, 12, 18, 8, 10, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 10, 0, 0, loc), InsertDateTime: time.Time{}},
@@ -199,7 +231,7 @@ func TestQueryUserPreferences(t *testing.T) {
 			t.Errorf("Failed to get favourite class for user %s", err)
 		}
 
-		if !CompareUserPreferences(preference, test.preference) {
+		if !compareUserPreferences(preference, test.preference) {
 			t.Errorf("Did not get expected result got: \n %+v  \nbut expected:\n %+v", preference, test.preference)
 		}
 	}
