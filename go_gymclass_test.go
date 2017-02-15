@@ -1,5 +1,7 @@
 package lm
 
+//TODO:
+
 import (
 	"reflect"
 	"testing"
@@ -41,13 +43,13 @@ func compareUserPreferences(a UserPreference, b UserPreference) bool {
 	return true
 }
 
-var loc, _ = time.LoadLocation("Pacific/Auckland")
+var now = time.Now()
 var testClasses = []GymClass{
-	{UUID: uuid.FromStringOrNil("2d50d47a-e355-11e6-ac91-5cf9388e20a4"), Gym: "city", Name: "BODYPUMP", Location: "Studio 1", StartDateTime: time.Date(2016, 12, 18, 8, 10, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 10, 0, 0, loc), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d50d480-e355-11e6-ac91-5cf9388e20a5"), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(2016, 12, 18, 8, 20, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 05, 0, 0, loc), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d50d483-e355-11e6-ac91-5cf9388e20a6"), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(2016, 12, 18, 9, 20, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 30, 0, 0, loc), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d50d486-e355-11e6-ac91-5cf9388e20a7"), Gym: "city", Name: "BODYBALANCE", Location: "Studio 1", StartDateTime: time.Date(2016, 12, 18, 19, 0, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 10, 10, 0, 0, loc), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d56ed4a-e355-11e6-ac91-5cf9388e20a8"), Gym: "city", Name: "CXWORX", Location: "Studio 2", StartDateTime: time.Date(2016, 12, 18, 9, 20, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 10, 20, 0, 0, loc), InsertDateTime: time.Time{}}}
+	{UUID: uuid.FromStringOrNil("2d50d47a-e355-11e6-ac91-5cf9388e20a4"), Gym: "city", Name: "BODYPUMP", Location: "Studio 1", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.Local), InsertDateTime: time.Time{}},
+	{UUID: uuid.FromStringOrNil("2d50d480-e355-11e6-ac91-5cf9388e20a5"), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.Local), InsertDateTime: time.Time{}},
+	{UUID: uuid.FromStringOrNil("2d50d483-e355-11e6-ac91-5cf9388e20a6"), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.Local), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+2, 0, 0, 0, time.Local), InsertDateTime: time.Time{}},
+	{UUID: uuid.FromStringOrNil("2d50d486-e355-11e6-ac91-5cf9388e20a7"), Gym: "city", Name: "BODYBALANCE", Location: "Studio 1", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+3, 0, 0, 0, time.Local), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+4, 0, 0, 0, time.Local), InsertDateTime: time.Time{}},
+	{UUID: uuid.FromStringOrNil("2d56ed4a-e355-11e6-ac91-5cf9388e20a8"), Gym: "city", Name: "CXWORX", Location: "Studio 2", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+4, 0, 0, 0, time.Local), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+5, 0, 0, 0, time.Local), InsertDateTime: time.Time{}}}
 
 type parseICSTest struct {
 	icsPath  string
@@ -134,13 +136,13 @@ func TestQueryClasses(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create database %s", err)
 	}
-	loc, _ := time.LoadLocation("Pacific/Auckland")
+
 	queryClassTests := []queryClassTest{
-		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, loc), After: time.Date(2000, 0, 0, 0, 0, 0, 0, loc), Limit: "100"}, expectedClassCount: 2},
-		{query: GymQuery{Gym: Gym{"britomart", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, loc), After: time.Date(2000, 0, 0, 0, 0, 0, 0, loc), Limit: "100"}, expectedClassCount: 0},
-		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "CXWORX", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, loc), After: time.Date(2000, 0, 0, 0, 0, 0, 0, loc), Limit: "100"}, expectedClassCount: 1},
-		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, loc), After: time.Date(2020, 0, 0, 0, 0, 0, 0, loc), Limit: "100"}, expectedClassCount: 0},
-		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2015, 01, 01, 01, 01, 01, 01, loc), After: time.Date(2000, 0, 0, 0, 0, 0, 0, loc), Limit: "100"}, expectedClassCount: 0},
+		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.Local), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.Local)}, expectedClassCount: 2},
+		{query: GymQuery{Gym: Gym{"britomart", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.Local), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.Local)}, expectedClassCount: 0},
+		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "CXWORX", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.Local), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.Local)}, expectedClassCount: 1},
+		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.Local), After: time.Date(2020, 0, 0, 0, 0, 0, 0, time.Local)}, expectedClassCount: 0},
+		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2015, 01, 01, 01, 01, 01, 01, time.Local), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.Local)}, expectedClassCount: 0},
 	}
 	for _, test := range queryClassTests {
 		classes, err := QueryClasses(test.query, testConfig)
@@ -166,13 +168,13 @@ func TestStoreUserClass(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create database %s", err)
 	}
-	allClasses, _ := QueryClasses(GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, loc), After: time.Date(2000, 0, 0, 0, 0, 0, 0, loc), Limit: "100"}, testConfig)
+	allClasses, _ := QueryClasses(GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.Local), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.Local)}, testConfig)
 	storeUserClassTests := []storeUserClassTest{
 		{"123", allClasses[0]},
 		{"123", allClasses[1]},
 		{"123", allClasses[2]},
 		{"123", allClasses[3]},
-		{"456", allClasses[3]},
+		{"456", allClasses[4]},
 	}
 	for _, test := range storeUserClassTests {
 		err := StoreUserClass(test.user, test.class.UUID, testConfig)
@@ -221,8 +223,10 @@ func TestQueryUserPreferences(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create database %s", err)
 	}
+
+	utc, _ := time.LoadLocation("UTC")
 	queryUserPreferencesTests := []queryUserPreferencesTest{
-		{"123", UserPreference{PreferredGym: "city", PreferredClass: "RPM", PreferredTime: 19, TotalClasses: 4, PreferredDay: 6, LastClassDate: time.Date(2016, 12, 18, 9, 20, 0, 0, loc)}},
+		{"123", UserPreference{PreferredGym: "city", PreferredClass: "RPM", PreferredTime: now.In(utc).Hour(), TotalClasses: 4, PreferredDay: int(now.Weekday()), LastClassDate: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+3, 0, 0, 0, time.Local)}},
 	}
 
 	for _, test := range queryUserPreferencesTests {
@@ -235,6 +239,34 @@ func TestQueryUserPreferences(t *testing.T) {
 			t.Errorf("Did not get expected result got: \n %+v  \nbut expected:\n %+v", preference, test.preference)
 		}
 	}
+}
+
+type queryPreferredClassesTest struct {
+	pref        UserPreference
+	noOfClasses int
+}
+
+func TestQueryPreferredClassesTest(t *testing.T) {
+	testConfig, err := NewConfig()
+	if err != nil {
+		t.Errorf("Failed to create database %s", err)
+	}
+
+	var queryPreferredClassesTests = []queryPreferredClassesTest{
+		{UserPreference{User: "123", TotalClasses: 4, ClassesPerWeek: 7, LastClassDate: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()-1, 0, 0, 0, time.Local), PreferredGym: "city", PreferredClass: "RPM", PreferredTime: now.Hour() + 2, PreferredDay: int(now.Weekday())}, 3},
+	}
+
+	for _, test := range queryPreferredClassesTests {
+		classes, err := QueryPreferredClasses(test.pref, testConfig)
+		if err != nil {
+			t.Errorf("Failed to query preferred classes %s", err)
+		}
+		if len(classes) != test.noOfClasses {
+			t.Errorf("Received wrong number of classes expected: %d but got %d", test.noOfClasses, len(classes))
+		}
+
+	}
+
 }
 
 type deleteUserClassTest struct {
@@ -250,7 +282,7 @@ func TestDeleteUserClass(t *testing.T) {
 	}
 
 	allClasses, _ := QueryClasses(GymQuery{
-		Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, loc), After: time.Date(2000, 0, 0, 0, 0, 0, 0, loc), Limit: "100"}, testConfig)
+		Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.Local), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.Local)}, testConfig)
 
 	deleteUserClassTests := []deleteUserClassTest{
 		{"123", allClasses[0]},
