@@ -76,16 +76,43 @@ type GymClass struct {
 	InsertDateTime time.Time `json:"insertdatetime" db:"insert_datetime"`
 }
 
+// GymPreference describes a preference to go to a particular Gym. The preference should be a value between 0 - 1
+type GymPreference struct {
+	Gym        Gym     `json:"gym"`
+	Preference float32 `json:"preference"`
+}
+
+// ClassPreference describes a preference to go to a particular class. The preference should be a value between 0 - 1
+type ClassPreference struct {
+	Class      string  `json:"class"`
+	Preference float32 `json:"preference"`
+}
+
+// WorkOutFrequency describes the number of times a user went to any gym class on a particular week
+type WorkOutFrequency struct {
+	Week  int `json:"week"`
+	Count int `json:"count"`
+}
+
+//ClassFrequency describes the number of times a user went to a particular class on a particular week
+
+// UserStatistics describes the different statistics about a user
+type UserStatistics struct {
+	TotalClasses     int                `json:"totalClasses"`
+	ClassesPerWeek   float32            `json:"classesPerWeek"`
+	LastClassDate    time.Time          `json:"lastClassDate"`
+	GymPreferences   []GymPreference    `json:"gymPreferences"`
+	ClassPreferences []ClassPreference  `json:"classPreferences"`
+	WorkOutFrequency []WorkOutFrequency `json:"workOutFrequency"`
+}
+
 // UserPreference describes a users preferences when going to the gym
 type UserPreference struct {
-	User           string    `json:"user" db:"user"`
-	TotalClasses   int       `json:"totalClasses" db:"total_classes"`
-	ClassesPerWeek float32   `json:"classesPerWeek" db:"classes_per_week"`
-	LastClassDate  time.Time `json:"lastClassDate" db:"last_class_date"`
-	PreferredGym   string    `json:"preferredGym" db:"preferred_gym"`
-	PreferredClass string    `json:"preferredClass" db:"preferred_class"`
-	PreferredTime  int       `json:"preferredTime" db:"preferred_time"`
-	PreferredDay   int       `json:"preferredDay" db:"preferred_day"`
+	User           string `json:"user" db:"user"`
+	PreferredGym   string `json:"preferredGym" db:"preferred_gym"`
+	PreferredClass string `json:"preferredClass" db:"preferred_class"`
+	PreferredTime  int    `json:"preferredTime" db:"preferred_time"`
+	PreferredDay   int    `json:"preferredDay" db:"preferred_day"`
 }
 
 // UserGymClass describes a saved GymClass by a user
@@ -241,7 +268,6 @@ func StoreClasses(classes []GymClass, dbConfig *Config) error {
 
 	// Save all classes
 	for _, class := range classes {
-		time.Sleep(time.Millisecond)
 
 		// Prepare insert query
 		stmt, err := dbConfig.DB.Prepare("INSERT OR IGNORE INTO class (uuid, gym, name, location, start_datetime, end_datetime, insert_datetime) values(?, ?, ?, ?, ?, ?, ?)")
@@ -250,8 +276,9 @@ func StoreClasses(classes []GymClass, dbConfig *Config) error {
 			return err
 		}
 		uuid := uuid.NewV1().String()
-		_, err = stmt.Exec(uuid, class.Gym, class.Name, class.Location, class.StartDateTime, class.EndDateTime, time.Now())
-		log.Infof("Executing insert query to store gym with args:\n UUID: %s\n gym: %s\n name: %s\n location: %s\n start_datetime: %s\n end_datetime: %s\n insert_datetime %s\n", uuid, class.Gym, class.Name, class.Location, class.StartDateTime, class.EndDateTime, time.Now())
+
+		_, err = stmt.Exec(uuid, class.Gym, class.Name, class.Location, class.StartDateTime.UTC(), class.EndDateTime.UTC(), time.Now().UTC())
+		log.Infof("Executing insert query to store gym with args:\n UUID: %s\n gym: %s\n name: %s\n location: %s\n start_datetime: %s\n end_datetime: %s\n insert_datetime %s\n", uuid, class.Gym, class.Name, class.Location, class.StartDateTime.UTC(), class.EndDateTime.UTC(), time.Now().UTC())
 
 		if err != nil {
 			log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to insert row")
@@ -260,6 +287,124 @@ func StoreClasses(classes []GymClass, dbConfig *Config) error {
 
 	}
 	return nil
+}
+
+// QueryUserStatistics will return a list of statistics about a user based on their usage
+func QueryUserStatistics(user string, dbConfig *Config) (UserStatistics, error) {
+	var stats UserStatistics
+	queries := map[string]string{
+		"TotalClasses":     "SELECT count(*) from user_class WHERE user = ?",
+		"LastClassDate":    "SELECT c.start_datetime FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? ORDER BY c.start_datetime DESC LIMIT 1",
+		"ClassesPerWeek":   "SELECT 7.0*count(*)/(SELECT julianday(datetime()) - julianday(MIN(c.start_datetime)) from class c INNER JOIN user_class uc ON uc.class_id = c.uuid) from user_class uc where uc.user = ?",
+		"GymPreferences":   "SELECT c.gym, 1.0*count(*)/(SELECT count(*) from class c INNER JOIN user_class uc ON uc.class_id = c.uuid where uc.user = ?) FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY c.gym",
+		"ClassPreferences": "SELECT c.name, 1.0*count(*)/(SELECT count(*) from class c INNER JOIN user_class uc ON uc.class_id = c.uuid where uc.user = ?) FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY c.name",
+		"WorkOutFrequency": "SELECT strftime('%W', datetime(start_datetime,'localtime')), count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY strftime('%W', datetime(start_datetime,'localtime'))",
+	}
+	for key, query := range queries {
+		stmt, err := dbConfig.DB.Prepare(query)
+		if err != nil {
+			log.WithFields(log.Fields{"error": err}).Error("Failed to prepare query")
+			return UserStatistics{}, err
+		}
+
+		switch key {
+		case "TotalClasses":
+			log.Infof("Executing query for %s with args user: %s", key, user)
+			row := stmt.QueryRow(user)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to query for total classes")
+				return UserStatistics{}, err
+			}
+			err := row.Scan(&stats.TotalClasses)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to parse total classes")
+			}
+		case "LastClassDate":
+			log.Infof("Executing query for %s with args user: %s", key, user)
+			row := stmt.QueryRow(user)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to query for last class date")
+				return UserStatistics{}, err
+			}
+			err := row.Scan(&stats.LastClassDate)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to parse last class date")
+				return UserStatistics{}, err
+			}
+		case "ClassesPerWeek":
+			log.Infof("Executing query for %s with args user: %s", key, user)
+			row := stmt.QueryRow(user)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to query for classes per week")
+				return UserStatistics{}, err
+			}
+			err := row.Scan(&stats.ClassesPerWeek)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to parse classes per week")
+				return UserStatistics{}, err
+			}
+
+		case "GymPreferences":
+			log.Infof("Executing query for %s with args user: %s", key, user)
+			rows, err := stmt.Query(user, user)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to query for gym preferences")
+				return UserStatistics{}, err
+			}
+			var allPref []GymPreference
+			for rows.Next() {
+				var pref GymPreference
+				var gymName string
+				err := rows.Scan(&gymName, &pref.Preference)
+				if err != nil {
+					log.WithFields(log.Fields{"error": err}).Error("Failed to query for gym preferences")
+					return UserStatistics{}, err
+				}
+				pref.Gym = GetGymByName(gymName)
+				allPref = append(allPref, pref)
+			}
+			stats.GymPreferences = allPref
+
+		case "ClassPreferences":
+			log.Infof("Executing query for %s with args user: %s", key, user)
+			rows, err := stmt.Query(user, user)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to query for class preferences")
+				return UserStatistics{}, err
+			}
+			var allPref []ClassPreference
+			for rows.Next() {
+				var pref ClassPreference
+				err := rows.Scan(&pref.Class, &pref.Preference)
+				if err != nil {
+					log.WithFields(log.Fields{"error": err}).Error("Failed to query for class preferences")
+					return UserStatistics{}, err
+				}
+				allPref = append(allPref, pref)
+			}
+			stats.ClassPreferences = allPref
+
+		case "WorkOutFrequency":
+			log.Infof("Executing query for %s with args user: %s", key, user)
+			rows, err := stmt.Query(user)
+			if err != nil {
+				log.WithFields(log.Fields{"error": err}).Error("Failed to query for work out frequency")
+				return UserStatistics{}, err
+			}
+			var allFreq []WorkOutFrequency
+			for rows.Next() {
+				var freq WorkOutFrequency
+				err := rows.Scan(&freq.Week, &freq.Count)
+				if err != nil {
+					log.WithFields(log.Fields{"error": err}).Error("Failed to query for work out frequency")
+					return UserStatistics{}, err
+				}
+				allFreq = append(allFreq, freq)
+			}
+			stats.WorkOutFrequency = allFreq
+		}
+	}
+	return stats, nil
 }
 
 // QueryUserClasses will return a list of classes that a particular user has saved
@@ -292,14 +437,12 @@ func QueryUserPreferences(user string, dbConfig *Config) (UserPreference, error)
 
 	var preference UserPreference
 	queries := map[string]string{
-		"TotalClasses":   "SELECT count(*) from user_class WHERE user = ?",
-		"LastClassDate":  "SELECT c.start_datetime FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? ORDER BY c.start_datetime DESC LIMIT 1",
-		"ClassesPerWeek": "SELECT 7*count(*)/(SELECT julianday(datetime()) - julianday(MIN(c.start_datetime)) from class c INNER JOIN user_class uc ON uc.class_id = c.uuid) from user_class uc where uc.user = ?",
-		"Day":            "SELECT strftime('%w', start_datetime), count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY strftime('%w', start_datetime) ORDER BY cnt DESC LIMIT 1",
-		"Class":          "SELECT c.name, count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY c.name ORDER BY cnt DESC LIMIT 1",
-		"Gym":            "SELECT c.gym, count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY c.gym ORDER BY cnt DESC LIMIT 1",
-		"StartTime":      "SELECT strftime('%H', c.start_datetime), count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY strftime('%H', c.start_datetime) ORDER BY cnt DESC LIMIT 1",
+		"Day":       "SELECT strftime('%w', start_datetime), count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY strftime('%w', start_datetime) ORDER BY cnt DESC LIMIT 1",
+		"Class":     "SELECT c.name, count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY c.name ORDER BY cnt DESC LIMIT 1",
+		"Gym":       "SELECT c.gym, count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY c.gym ORDER BY cnt DESC LIMIT 1",
+		"StartTime": "SELECT strftime('%H', c.start_datetime), count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY strftime('%H', c.start_datetime) ORDER BY cnt DESC LIMIT 1",
 	}
+
 	for key, query := range queries {
 		stmt, err := dbConfig.DB.Prepare(query)
 		if err != nil {
@@ -315,16 +458,6 @@ func QueryUserPreferences(user string, dbConfig *Config) (UserPreference, error)
 		}
 
 		switch key {
-		case "LastClassDate":
-			err := row.Scan(&preference.LastClassDate)
-			if err != nil {
-				log.WithFields(log.Fields{"error": err}).Error("Failed to parse last class date")
-			}
-		case "TotalClasses":
-			err := row.Scan(&preference.TotalClasses)
-			if err != nil {
-				log.WithFields(log.Fields{"error": err}).Error("Failed to parse total classes")
-			}
 		case "Day":
 			err := row.Scan(&preference.PreferredDay, nil)
 			if err != nil {
@@ -345,11 +478,6 @@ func QueryUserPreferences(user string, dbConfig *Config) (UserPreference, error)
 			if err != nil {
 				log.WithFields(log.Fields{"error": err}).Error("Failed to parse preferred time")
 			}
-		case "ClassesPerWeek":
-			err := row.Scan(&preference.ClassesPerWeek)
-			if err != nil {
-				log.WithFields(log.Fields{"error": err}).Error("Failed to parse classes per week")
-			}
 		}
 	}
 	return preference, nil
@@ -357,9 +485,8 @@ func QueryUserPreferences(user string, dbConfig *Config) (UserPreference, error)
 
 // QueryPreferredClasses returns a list of classes based on a users preference
 func QueryPreferredClasses(preference UserPreference, dbConfig *Config) ([]GymClass, error) {
-
 	// Today
-	year, month, day := time.Now().Date()
+	year, month, day := time.Now().UTC().Date()
 	/*
 			 | Class | Gym | Time |
 			 |   0   |  0  |  1   | - Any class, any gym at a preferred time
@@ -374,8 +501,8 @@ func QueryPreferredClasses(preference UserPreference, dbConfig *Config) ([]GymCl
 	// Preferred class at preferred gym at preferred time
 	var preferredQuery1 = GymQuery{}
 	preferredQuery1.Class = preference.PreferredClass
-	preferredQuery1.After = time.Date(year, month, day, preference.PreferredTime-1, 0, 0, 0, time.Local)
-	preferredQuery1.Before = time.Date(year, month, day, preference.PreferredTime+1, 0, 0, 0, time.Local)
+	preferredQuery1.After = time.Date(year, month, day, preference.PreferredTime-1, 0, 0, 0, time.UTC)
+	preferredQuery1.Before = time.Date(year, month, day, preference.PreferredTime+1, 0, 0, 0, time.UTC)
 	preferredQuery1.Gym = GetGymByName(preference.PreferredGym)
 	queryClasses1, err := QueryClasses(preferredQuery1, dbConfig)
 	if err != nil {
@@ -385,22 +512,27 @@ func QueryPreferredClasses(preference UserPreference, dbConfig *Config) ([]GymCl
 	// Preferred class at preferred gym at any time
 	var preferredQuery2 = GymQuery{}
 	preferredQuery2.Class = preference.PreferredClass
-	preferredQuery2.After = time.Now()
-	preferredQuery2.Before = time.Date(year, month, day+2, 0, 0, 0, 0, time.Local)
+	preferredQuery2.After = time.Now().UTC()
+	preferredQuery2.Before = time.Date(year, month, day+2, 0, 0, 0, 0, time.UTC)
 	preferredQuery2.Gym = GetGymByName(preference.PreferredGym)
 	queryClasses2, err := QueryClasses(preferredQuery2, dbConfig)
+
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to query for preferred classes for a user")
 	}
 
-	// Preferred class at any gym at preferred time
+	// Preferred class at any gym at preferred time (after now)
 	var preferredQuery3 = GymQuery{}
-	preferredQuery3.Class = preference.PreferredClass
-	preferredQuery1.After = time.Date(year, month, day, preference.PreferredTime-1, 0, 0, 0, time.Local)
-	preferredQuery1.Before = time.Date(year, month, day, preference.PreferredTime+1, 0, 0, 0, time.Local)
-	queryClasses3, err := QueryClasses(preferredQuery3, dbConfig)
-	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Failed to query for preferred classes for a user")
+	var queryClasses3 = []GymClass{}
+	if time.Now().UTC().Hour() < (preference.PreferredTime - 1) {
+		preferredQuery3.Class = preference.PreferredClass
+		preferredQuery1.After = time.Date(year, month, day, preference.PreferredTime-1, 0, 0, 0, time.UTC)
+		preferredQuery1.Before = time.Date(year, month, day, preference.PreferredTime+1, 0, 0, 0, time.UTC)
+		queryClasses3, err = QueryClasses(preferredQuery3, dbConfig)
+		if err != nil {
+			log.WithFields(log.Fields{"error": err}).Error("Failed to query for preferred classes for a user")
+		}
+
 	}
 
 	allClasses := append(queryClasses1, queryClasses2...)
@@ -505,6 +637,7 @@ func DeleteUserClass(user string, class uuid.UUID, dbConfig *Config) error {
 
 // QueryClassesByName will take a query string and try parse out the correct query and return the results
 func QueryClassesByName(query string, dbConfig *Config) ([]GymClass, error) {
+
 	log.Infof("Querying wit.ai for '%s'", query)
 	accessToken := os.Getenv("WIT_ACCESS_TOKEN")
 	if accessToken == "" {
@@ -636,6 +769,7 @@ func QueryClasses(query GymQuery, dbConfig *Config) ([]GymClass, error) {
 		limit = query.Limit
 	} else {
 		limit = -1
+
 	}
 	rows, err := stmt.Query(
 		strings.ToLower(likeGym),
@@ -644,7 +778,7 @@ func QueryClasses(query GymQuery, dbConfig *Config) ([]GymClass, error) {
 		query.Before,
 		limit,
 	)
-	log.Infof("Executing query with args gym: %s name: %s, start_datetime: %s, end_datetime: %s limit %s", likeGym, likeName, query.After, query.Before, query.Limit)
+	log.Infof("Executing query with args gym: %s name: %s, start_datetime: %s, end_datetime: %s limit %s", likeGym, likeName, query.After, query.Before, limit)
 	results := make([]GymClass, 0)
 	for rows.Next() {
 		var result GymClass

@@ -3,6 +3,8 @@ package lm
 //TODO:
 
 import (
+	"fmt"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -12,10 +14,6 @@ import (
 )
 
 func compareUserPreferences(a UserPreference, b UserPreference) bool {
-	if !a.LastClassDate.Equal(b.LastClassDate) {
-		return false
-	}
-
 	if a.PreferredClass != b.PreferredClass {
 		return false
 	}
@@ -32,10 +30,6 @@ func compareUserPreferences(a UserPreference, b UserPreference) bool {
 		return false
 	}
 
-	if a.TotalClasses != b.TotalClasses {
-		return false
-	}
-
 	if a.User != b.User {
 		return false
 	}
@@ -43,13 +37,44 @@ func compareUserPreferences(a UserPreference, b UserPreference) bool {
 	return true
 }
 
-var now = time.Now()
+// TODO: Don't ignore frequency
+func compareUserStatistics(a UserStatistics, b UserStatistics) bool {
+	if a.TotalClasses != b.TotalClasses {
+		fmt.Printf("Results not equal for TotalClasses: %s and %s", a.TotalClasses, b.TotalClasses)
+		return false
+	}
+
+	if !reflect.DeepEqual(a.ClassPreferences, b.ClassPreferences) {
+		fmt.Printf("Results not equal for ClassPreferences: %s and %s", a.ClassPreferences, b.ClassPreferences)
+		return false
+	}
+
+	if !reflect.DeepEqual(a.GymPreferences, b.GymPreferences) {
+		fmt.Printf("Results not equal for GymPreferences: %s and %s", a.GymPreferences, b.GymPreferences)
+		return false
+	}
+
+	if !reflect.DeepEqual(a.WorkOutFrequency, b.WorkOutFrequency) {
+		fmt.Printf("Results not equal for WorkOutFrequency: %s and %s", a.WorkOutFrequency, b.WorkOutFrequency)
+		return false
+	}
+
+	if !((a.LastClassDate.Year() == b.LastClassDate.Year()) && (a.LastClassDate.Month() == b.LastClassDate.Month()) && (a.LastClassDate.Day() == b.LastClassDate.Day()) && (a.LastClassDate.Hour() == b.LastClassDate.Hour()) && (a.LastClassDate.Minute() == b.LastClassDate.Minute())) {
+		fmt.Printf("Results not equal for LastClassDate: %v and %v", a.LastClassDate, b.LastClassDate)
+		return false
+	}
+
+	return true
+
+}
+
+var now = time.Now().UTC()
 var testClasses = []GymClass{
-	{UUID: uuid.FromStringOrNil("2d50d47a-e355-11e6-ac91-5cf9388e20a4"), Gym: "city", Name: "BODYPUMP", Location: "Studio 1", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.Local), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d50d480-e355-11e6-ac91-5cf9388e20a5"), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.Local), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d50d483-e355-11e6-ac91-5cf9388e20a6"), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.Local), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+2, 0, 0, 0, time.Local), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d50d486-e355-11e6-ac91-5cf9388e20a7"), Gym: "city", Name: "BODYBALANCE", Location: "Studio 1", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+3, 0, 0, 0, time.Local), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+4, 0, 0, 0, time.Local), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d56ed4a-e355-11e6-ac91-5cf9388e20a8"), Gym: "city", Name: "CXWORX", Location: "Studio 2", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+4, 0, 0, 0, time.Local), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+5, 0, 0, 0, time.Local), InsertDateTime: time.Time{}}}
+	{UUID: uuid.FromStringOrNil("2d50d47a-e355-11e6-ac91-5cf9388e20a4"), Gym: "city", Name: "BODYPUMP", Location: "Studio 1", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.UTC), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.UTC), InsertDateTime: time.Time{}},
+	{UUID: uuid.FromStringOrNil("2d50d480-e355-11e6-ac91-5cf9388e20a5"), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.UTC), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.UTC), InsertDateTime: time.Time{}},
+	{UUID: uuid.FromStringOrNil("2d50d483-e355-11e6-ac91-5cf9388e20a6"), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.UTC), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+2, 0, 0, 0, time.UTC), InsertDateTime: time.Time{}},
+	{UUID: uuid.FromStringOrNil("2d50d486-e355-11e6-ac91-5cf9388e20a7"), Gym: "city", Name: "BODYBALANCE", Location: "Studio 1", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+3, 0, 0, 0, time.UTC), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+4, 0, 0, 0, time.UTC), InsertDateTime: time.Time{}},
+	{UUID: uuid.FromStringOrNil("2d56ed4a-e355-11e6-ac91-5cf9388e20a8"), Gym: "city", Name: "CXWORX", Location: "Studio 2", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+4, 0, 0, 0, time.UTC), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+5, 0, 0, 0, time.UTC), InsertDateTime: time.Time{}}}
 
 type parseICSTest struct {
 	icsPath  string
@@ -138,11 +163,11 @@ func TestQueryClasses(t *testing.T) {
 	}
 
 	queryClassTests := []queryClassTest{
-		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.Local), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.Local)}, expectedClassCount: 2},
-		{query: GymQuery{Gym: Gym{"britomart", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.Local), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.Local)}, expectedClassCount: 0},
-		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "CXWORX", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.Local), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.Local)}, expectedClassCount: 1},
-		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.Local), After: time.Date(2020, 0, 0, 0, 0, 0, 0, time.Local)}, expectedClassCount: 0},
-		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2015, 01, 01, 01, 01, 01, 01, time.Local), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.Local)}, expectedClassCount: 0},
+		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 2},
+		{query: GymQuery{Gym: Gym{"britomart", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 0},
+		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "CXWORX", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 1},
+		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2020, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 0},
+		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2015, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 0},
 	}
 	for _, test := range queryClassTests {
 		classes, err := QueryClasses(test.query, testConfig)
@@ -168,7 +193,7 @@ func TestStoreUserClass(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create database %s", err)
 	}
-	allClasses, _ := QueryClasses(GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.Local), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.Local)}, testConfig)
+	allClasses, _ := QueryClasses(GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, testConfig)
 	storeUserClassTests := []storeUserClassTest{
 		{"123", allClasses[0]},
 		{"123", allClasses[1]},
@@ -224,9 +249,8 @@ func TestQueryUserPreferences(t *testing.T) {
 		t.Errorf("Failed to create database %s", err)
 	}
 
-	utc, _ := time.LoadLocation("UTC")
 	queryUserPreferencesTests := []queryUserPreferencesTest{
-		{"123", UserPreference{PreferredGym: "city", PreferredClass: "RPM", PreferredTime: now.In(utc).Hour(), TotalClasses: 4, PreferredDay: int(now.Weekday()), LastClassDate: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+3, 0, 0, 0, time.Local)}},
+		{"123", UserPreference{PreferredGym: "city", PreferredClass: "RPM", PreferredTime: now.Hour(), PreferredDay: int(now.Weekday())}},
 	}
 
 	for _, test := range queryUserPreferencesTests {
@@ -253,11 +277,12 @@ func TestQueryPreferredClassesTest(t *testing.T) {
 	}
 
 	var queryPreferredClassesTests = []queryPreferredClassesTest{
-		{UserPreference{User: "123", TotalClasses: 4, ClassesPerWeek: 7, LastClassDate: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()-1, 0, 0, 0, time.Local), PreferredGym: "city", PreferredClass: "RPM", PreferredTime: now.Hour() + 2, PreferredDay: int(now.Weekday())}, 3},
+		{UserPreference{User: "123", PreferredGym: "city", PreferredClass: "RPM", PreferredTime: now.Hour() + 2, PreferredDay: int(now.Weekday())}, 1},
 	}
 
 	for _, test := range queryPreferredClassesTests {
 		classes, err := QueryPreferredClasses(test.pref, testConfig)
+		fmt.Println(classes)
 		if err != nil {
 			t.Errorf("Failed to query preferred classes %s", err)
 		}
@@ -265,6 +290,37 @@ func TestQueryPreferredClassesTest(t *testing.T) {
 			t.Errorf("Received wrong number of classes expected: %d but got %d", test.noOfClasses, len(classes))
 		}
 
+	}
+
+}
+
+type queryUserStatisticsTest struct {
+	user  string
+	stats UserStatistics
+}
+
+func TestQueryUserStatistics(t *testing.T) {
+	testConfig, err := NewConfig()
+
+	if err != nil {
+		t.Errorf("Failed to create database %s", err)
+	}
+	city := GetGymByName("city")
+	_, week := now.ISOWeek()
+	queryUserStatistics := []queryUserStatisticsTest{
+		{"123", UserStatistics{TotalClasses: 4, ClassesPerWeek: -1, LastClassDate: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+3, 0, 0, 0, time.UTC), GymPreferences: []GymPreference{{gym: city, preference: 1.0}},
+			ClassPreferences: []ClassPreference{{"BODYBALANCE", 0.25}, {"BODYPUMP", 0.25}, {"RPM", 0.5}}, WorkOutFrequency: []WorkOutFrequency{{week, 4}}}},
+	}
+
+	for _, test := range queryUserStatistics {
+		stats, err := QueryUserStatistics(test.user, testConfig)
+		if err != nil {
+			t.Errorf("Failed to get stats for user %s", err)
+		}
+
+		if !compareUserStatistics(stats, test.stats) {
+			t.Errorf("Did not get expected got: %s but expected %s", stats, test.stats)
+		}
 	}
 
 }
@@ -282,14 +338,14 @@ func TestDeleteUserClass(t *testing.T) {
 	}
 
 	allClasses, _ := QueryClasses(GymQuery{
-		Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.Local), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.Local)}, testConfig)
+		Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, testConfig)
 
 	deleteUserClassTests := []deleteUserClassTest{
 		{"123", allClasses[0]},
 		{"123", allClasses[1]},
 		{"123", allClasses[2]},
 		{"123", allClasses[3]},
-		{"456", allClasses[3]},
+		{"456", allClasses[4]},
 	}
 	for _, test := range deleteUserClassTests {
 		err := DeleteUserClass(test.user, test.class.UUID, testConfig)
@@ -297,5 +353,5 @@ func TestDeleteUserClass(t *testing.T) {
 			t.Errorf("Failed to get user classes %s", err)
 		}
 	}
-
+	_ = os.Remove("gym.db")
 }
