@@ -308,7 +308,7 @@ func TestQueryUserStatistics(t *testing.T) {
 	city := GetGymByName("city")
 	_, week := now.ISOWeek()
 	queryUserStatistics := []queryUserStatisticsTest{
-		{"123", UserStatistics{TotalClasses: 4, ClassesPerWeek: -1, LastClassDate: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+3, 0, 0, 0, time.UTC), GymPreferences: []GymPreference{{gym: city, preference: 1.0}},
+		{"123", UserStatistics{TotalClasses: 4, ClassesPerWeek: -1, LastClassDate: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+3, 0, 0, 0, time.UTC), GymPreferences: []GymPreference{{Gym: city, Preference: 1.0}},
 			ClassPreferences: []ClassPreference{{"BODYBALANCE", 0.25}, {"BODYPUMP", 0.25}, {"RPM", 0.5}}, WorkOutFrequency: []WorkOutFrequency{{week, 4}}}},
 	}
 
