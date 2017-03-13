@@ -99,7 +99,7 @@ type WorkOutFrequency struct {
 // UserStatistics describes the different statistics about a user
 type UserStatistics struct {
 	TotalClasses     int                `json:"totalClasses"`
-	ClassesPerWeek   float32            `json:"classesPerWeek"`
+	ClassesPerWeek   float64            `json:"classesPerWeek"`
 	LastClassDate    time.Time          `json:"lastClassDate"`
 	GymPreferences   []GymPreference    `json:"gymPreferences"`
 	ClassPreferences []ClassPreference  `json:"classPreferences"`
@@ -295,7 +295,7 @@ func QueryUserStatistics(user string, dbConfig *Config) (UserStatistics, error) 
 	queries := map[string]string{
 		"TotalClasses":     "SELECT count(*) from user_class WHERE user = ?",
 		"LastClassDate":    "SELECT c.start_datetime FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? ORDER BY c.start_datetime DESC LIMIT 1",
-		"ClassesPerWeek":   "SELECT 1.0*count(*)*(strftime('%W', 'now') - strftime('%W',MIN(c.start_datetime))) from class c inner join user_class uc where uc.class_id = c.uuid and uc.user = ?;",
+		"ClassesPerWeek":   "SELECT 1.0*count(*)/(strftime('%W', 'now') - strftime('%W',MIN(c.start_datetime))) from class c inner join user_class uc where uc.class_id = c.uuid and uc.user = ?",
 		"GymPreferences":   "SELECT c.gym, 1.0*count(*)/(SELECT count(*) from class c INNER JOIN user_class uc ON uc.class_id = c.uuid where uc.user = ?) FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY c.gym",
 		"ClassPreferences": "SELECT c.name, 1.0*count(*)/(SELECT count(*) from class c INNER JOIN user_class uc ON uc.class_id = c.uuid where uc.user = ?) FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY c.name",
 		"WorkOutFrequency": "SELECT strftime('%W', datetime(start_datetime,'localtime')), count(*) as cnt FROM class c INNER JOIN user_class uc ON uc.class_id = c.uuid WHERE uc.user = ? GROUP BY strftime('%W', datetime(start_datetime,'localtime'))",
@@ -338,7 +338,13 @@ func QueryUserStatistics(user string, dbConfig *Config) (UserStatistics, error) 
 				log.WithFields(log.Fields{"error": err}).Error("Failed to query for classes per week")
 				return UserStatistics{}, err
 			}
-			err := row.Scan(&stats.ClassesPerWeek)
+			var f sql.NullFloat64
+			err := row.Scan(&f)
+			if f.Valid {
+				stats.ClassesPerWeek = f.Float64
+			} else {
+				stats.ClassesPerWeek = float64(stats.TotalClasses)
+			}
 			if err != nil {
 				log.WithFields(log.Fields{"error": err}).Error("Failed to parse classes per week")
 				return UserStatistics{}, err
