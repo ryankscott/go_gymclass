@@ -678,6 +678,7 @@ func QueryClassesByName(query string, dbConfig *Config) ([]GymClass, error) {
 			cls := fmt.Sprintf("%v", *class[0].Value)
 			cla := strings.Split(cls, " ")
 			if len(cla) > 0 {
+				log.Infof("Found multiple classes %s", cla)
 				gymQuery.Class = cla[0]
 			} else {
 				gymQuery.Class = cls
@@ -784,7 +785,7 @@ func QueryClasses(query GymQuery, dbConfig *Config) ([]GymClass, error) {
 		query.Before,
 		limit,
 	)
-	log.Infof("Executing query with args gym: %s name: %s, start_datetime: %s, end_datetime: %s limit %s", likeGym, likeName, query.After, query.Before, limit)
+	log.Infof("Executing query with args gym: %s name: %s, start_datetime: %s, end_datetime: %s limit %d", likeGym, likeName, query.After, query.Before, limit)
 	results := make([]GymClass, 0)
 	for rows.Next() {
 		var result GymClass
