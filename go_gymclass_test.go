@@ -3,70 +3,14 @@ package lm
 //TODO:
 
 import (
-	"fmt"
 	"os"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/PuloV/ics-golang"
 	"github.com/satori/go.uuid"
+	"github.com/stretchr/testify/assert"
 )
-
-func compareUserPreferences(a UserPreference, b UserPreference) bool {
-	if a.PreferredClass != b.PreferredClass {
-		return false
-	}
-
-	if a.PreferredDay != b.PreferredDay {
-		return false
-	}
-
-	if a.PreferredGym != b.PreferredGym {
-		return false
-	}
-
-	if a.PreferredTime != b.PreferredTime {
-		return false
-	}
-
-	if a.User != b.User {
-		return false
-	}
-
-	return true
-}
-
-// TODO: Don't ignore frequency
-func compareUserStatistics(a UserStatistics, b UserStatistics) bool {
-	if a.TotalClasses != b.TotalClasses {
-		fmt.Printf("Results not equal for TotalClasses: %s and %s", a.TotalClasses, b.TotalClasses)
-		return false
-	}
-
-	if !reflect.DeepEqual(a.ClassPreferences, b.ClassPreferences) {
-		fmt.Printf("Results not equal for ClassPreferences: %s and %s", a.ClassPreferences, b.ClassPreferences)
-		return false
-	}
-
-	if !reflect.DeepEqual(a.GymPreferences, b.GymPreferences) {
-		fmt.Printf("Results not equal for GymPreferences: %s and %s", a.GymPreferences, b.GymPreferences)
-		return false
-	}
-
-	if !reflect.DeepEqual(a.WorkOutFrequency, b.WorkOutFrequency) {
-		fmt.Printf("Results not equal for WorkOutFrequency: %s and %s", a.WorkOutFrequency, b.WorkOutFrequency)
-		return false
-	}
-
-	if !((a.LastClassDate.Year() == b.LastClassDate.Year()) && (a.LastClassDate.Month() == b.LastClassDate.Month()) && (a.LastClassDate.Day() == b.LastClassDate.Day()) && (a.LastClassDate.Hour() == b.LastClassDate.Hour()) && (a.LastClassDate.Minute() == b.LastClassDate.Minute())) {
-		fmt.Printf("Results not equal for LastClassDate: %v and %v", a.LastClassDate, b.LastClassDate)
-		return false
-	}
-
-	return true
-
-}
 
 var now = time.Now().UTC()
 var testClasses = []GymClass{
@@ -132,9 +76,7 @@ func TestParseICS(t *testing.T) {
 				t.Errorf("Error found when parsing ICS %s", err)
 			}
 			for k, v := range classes {
-				if !reflect.DeepEqual(v, test.expected[k]) {
-					t.Errorf("Failed to parse ICS expected: %s but got: %s", v, test.expected[k])
-				}
+				assert.Equal(t, test.expected[k], v, "Failed to parse ICS")
 			}
 		}
 	}
@@ -149,6 +91,7 @@ func TestStoreClasses(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error when storing classes %s", err)
 	}
+	defer testConfig.DB.Close()
 }
 
 type queryClassTest struct {
@@ -160,23 +103,24 @@ func TestQueryClasses(t *testing.T) {
 	testConfig, err := NewConfig()
 	if err != nil {
 		t.Errorf("Failed to create database %s", err)
+		return
 	}
+	defer testConfig.DB.Close()
 
 	queryClassTests := []queryClassTest{
-		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 2},
-		{query: GymQuery{Gym: Gym{"britomart", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 0},
-		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "CXWORX", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 1},
-		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2020, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 0},
-		{query: GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "RPM", Before: time.Date(2015, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 0},
+		{query: GymQuery{Gym: []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}}, Class: []string{"RPM"}, Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 2},
+		{query: GymQuery{Gym: []Gym{Gym{"britomart", "96382586-e31c-df11-9eaa-0050568522bb"}}, Class: []string{"RPM"}, Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 0},
+		{query: GymQuery{Gym: []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}}, Class: []string{"CXWORX"}, Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 1},
+		{query: GymQuery{Gym: []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}}, Class: []string{"RPM"}, Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2020, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 0},
+		{query: GymQuery{Gym: []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}}, Class: []string{"RPM"}, Before: time.Date(2015, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 0},
 	}
+
 	for _, test := range queryClassTests {
 		classes, err := QueryClasses(test.query, testConfig)
 		if err != nil {
 			t.Errorf("Failed to query classes %s", err)
 		}
-		if len(classes) != test.expectedClassCount {
-			t.Errorf("Did not get expected number of classes, expected: %d but got: %d", test.expectedClassCount, len(classes))
-		}
+		assert.Equal(t, test.expectedClassCount, len(classes), "Did not get expected classes when querying")
 
 	}
 
@@ -193,7 +137,9 @@ func TestStoreUserClass(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create database %s", err)
 	}
-	allClasses, _ := QueryClasses(GymQuery{Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, testConfig)
+	defer testConfig.DB.Close()
+
+	allClasses, _ := QueryClasses(GymQuery{Gym: []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}}, Class: nil, Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, testConfig)
 	storeUserClassTests := []storeUserClassTest{
 		{"123", allClasses[0]},
 		{"123", allClasses[1]},
@@ -203,9 +149,7 @@ func TestStoreUserClass(t *testing.T) {
 	}
 	for _, test := range storeUserClassTests {
 		err := StoreUserClass(test.user, test.class.UUID, testConfig)
-		if err != nil {
-			t.Errorf("Failed to store user class %s", err)
-		}
+		assert.NoError(t, err, "Failed to store user class without error")
 	}
 }
 
@@ -216,10 +160,10 @@ type queryUserClassTest struct {
 
 func TestQueryUserClasses(t *testing.T) {
 	testConfig, err := NewConfig()
-
 	if err != nil {
 		t.Errorf("Failed to create database %s", err)
 	}
+	defer testConfig.DB.Close()
 	queryUserClassTests := []queryUserClassTest{
 		{"123", 4},
 		{"456", 1},
@@ -230,9 +174,7 @@ func TestQueryUserClasses(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to get user classes %s", err)
 		}
-		if len(actualClasses) != test.expectedClassCount {
-			t.Errorf("Did not get expected number of user classes got %d but expected %d", len(actualClasses), test.expectedClassCount)
-		}
+		assert.Equal(t, test.expectedClassCount, len(actualClasses), "Did not get expected number of classes for user")
 	}
 
 }
@@ -244,11 +186,10 @@ type queryUserPreferencesTest struct {
 
 func TestQueryUserPreferences(t *testing.T) {
 	testConfig, err := NewConfig()
-
 	if err != nil {
 		t.Errorf("Failed to create database %s", err)
 	}
-
+	defer testConfig.DB.Close()
 	queryUserPreferencesTests := []queryUserPreferencesTest{
 		{"123", UserPreference{PreferredGym: "city", PreferredClass: "RPM", PreferredTime: now.Hour(), PreferredDay: int(now.Weekday())}},
 	}
@@ -259,9 +200,7 @@ func TestQueryUserPreferences(t *testing.T) {
 			t.Errorf("Failed to get favourite class for user %s", err)
 		}
 
-		if !compareUserPreferences(preference, test.preference) {
-			t.Errorf("Did not get expected result got: \n %+v  \nbut expected:\n %+v", preference, test.preference)
-		}
+		assert.Equal(t, test.preference, preference, "Did not get expected user preferences")
 	}
 }
 
@@ -275,20 +214,18 @@ func TestQueryPreferredClassesTest(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create database %s", err)
 	}
+	defer testConfig.DB.Close()
 
 	var queryPreferredClassesTests = []queryPreferredClassesTest{
-		{UserPreference{User: "123", PreferredGym: "city", PreferredClass: "RPM", PreferredTime: now.Hour() + 2, PreferredDay: int(now.Weekday())}, 1},
+		{UserPreference{User: "123", PreferredGym: "city", PreferredClass: "RPM", PreferredTime: now.Hour() + 2, PreferredDay: int(now.Weekday())}, 2},
 	}
 
 	for _, test := range queryPreferredClassesTests {
 		classes, err := QueryPreferredClasses(test.pref, testConfig)
-		fmt.Println(classes)
 		if err != nil {
 			t.Errorf("Failed to query preferred classes %s", err)
 		}
-		if len(classes) != test.noOfClasses {
-			t.Errorf("Received wrong number of classes expected: %d but got %d", test.noOfClasses, len(classes))
-		}
+		assert.Equal(t, test.noOfClasses, len(classes), "Received wrong number of classes when finding preferred classes")
 
 	}
 
@@ -301,15 +238,15 @@ type queryUserStatisticsTest struct {
 
 func TestQueryUserStatistics(t *testing.T) {
 	testConfig, err := NewConfig()
-
 	if err != nil {
 		t.Errorf("Failed to create database %s", err)
 	}
+	defer testConfig.DB.Close()
 	city := GetGymByName("city")
 	_, week := now.ISOWeek()
 	queryUserStatistics := []queryUserStatisticsTest{
-		{"123", UserStatistics{TotalClasses: 4, ClassesPerWeek: -1, LastClassDate: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+3, 0, 0, 0, time.UTC), GymPreferences: []GymPreference{{Gym: city, Preference: 1.0}},
-			ClassPreferences: []ClassPreference{{"BODYBALANCE", 0.25}, {"BODYPUMP", 0.25}, {"RPM", 0.5}}, WorkOutFrequency: []WorkOutFrequency{{week, 4}}}},
+		{"123", UserStatistics{TotalClasses: 4, ClassesPerWeek: 32, LastClassDate: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+3, 0, 0, 0, time.UTC), GymPreferences: []GymPreference{{Gym: city, Preference: 1.0}},
+			ClassPreferences: []ClassPreference{{"BODYPUMP", 0.25}, {"RPM", 0.5}, {"BODYBALANCE", 0.25}}, WorkOutFrequency: []WorkOutFrequency{{week, 4}}}},
 	}
 
 	for _, test := range queryUserStatistics {
@@ -318,9 +255,7 @@ func TestQueryUserStatistics(t *testing.T) {
 			t.Errorf("Failed to get stats for user %s", err)
 		}
 
-		if !compareUserStatistics(stats, test.stats) {
-			t.Errorf("Did not get expected got: %s but expected %s", stats, test.stats)
-		}
+		assert.Equal(t, stats, test.stats, "User stats were not the same as expected")
 	}
 
 }
@@ -338,7 +273,7 @@ func TestDeleteUserClass(t *testing.T) {
 	}
 
 	allClasses, _ := QueryClasses(GymQuery{
-		Gym: Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Class: "", Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, testConfig)
+		Gym: []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}}, Class: nil, Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, testConfig)
 
 	deleteUserClassTests := []deleteUserClassTest{
 		{"123", allClasses[0]},
@@ -349,9 +284,7 @@ func TestDeleteUserClass(t *testing.T) {
 	}
 	for _, test := range deleteUserClassTests {
 		err := DeleteUserClass(test.user, test.class.UUID, testConfig)
-		if err != nil {
-			t.Errorf("Failed to get user classes %s", err)
-		}
+		assert.NoError(t, err, "Error when deleting user classes")
 	}
 	_ = os.Remove("gym.db")
 }
