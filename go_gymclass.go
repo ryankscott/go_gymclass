@@ -391,6 +391,7 @@ func parseICS(cal *ics.Calendar, gym Gym) (GymClasses, error) {
 		name := event.GetSummary()
 		translateName(&name)
 		foundClass = GymClass{
+			UUID:          uuid.NewV4(),
 			Gym:           gym.Name,
 			Name:          name,
 			Location:      event.GetLocation(),
@@ -435,8 +436,8 @@ func GetClasses(gyms []Gym) (GymClasses, error) {
 
 // StoreClasses will store a list of classes into a database based on the configuration provided
 func StoreClasses(classes GymClasses, dbConfig *Config) error {
+	stdClasses := 0
 	for _, class := range classes {
-		// Boltd DB store
 		c, err := json.Marshal(class)
 		if err != nil {
 			log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to marshall class to JSON for storage")
@@ -445,14 +446,20 @@ func StoreClasses(classes GymClasses, dbConfig *Config) error {
 		err = dbConfig.DB.Update(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte("Classes"))
 			err := b.Put([]byte(class.UUID.String()), c)
-			return err
+			if err != nil {
+				log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to store class into db")
+				return err
+			}
+			return nil
 		})
 		if err != nil {
-			log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to insert row into bolt db")
+			log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to insert class into db")
 			return err
 		}
+		stdClasses++
 
 	}
+	log.Infof("Stored %d classes", stdClasses)
 	return nil
 }
 
@@ -889,4 +896,16 @@ func classInQuery(query GymQuery, class GymClass) bool {
 		}
 	}
 	return true
+}
+
+func init() {
+	debug := os.Getenv("DEBUG")
+	if debug == "true" {
+		log.WithFields(log.Fields{"value": "DEBUG"}).Info("Setting log level to debug")
+		log.SetLevel(log.DebugLevel)
+	} else {
+		log.Info("Setting log level to info")
+		log.SetLevel(log.InfoLevel)
+	}
+	log.SetOutput(os.Stdout)
 }

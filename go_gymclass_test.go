@@ -1,24 +1,74 @@
 package lm
 
-//TODO:
-
 import (
+	"fmt"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
-	"github.com/PuloV/ics-golang"
+	ics "github.com/PuloV/ics-golang"
 	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 )
 
 var now = time.Now().UTC()
 var testClasses = []GymClass{
-	{UUID: uuid.FromStringOrNil("2d50d47a-e355-11e6-ac91-5cf9388e20a4"), Gym: "city", Name: "BODYPUMP", Location: "Studio 1", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.UTC), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.UTC), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d50d480-e355-11e6-ac91-5cf9388e20a5"), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.UTC), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.UTC), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d50d483-e355-11e6-ac91-5cf9388e20a6"), Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.UTC), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+2, 0, 0, 0, time.UTC), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d50d486-e355-11e6-ac91-5cf9388e20a7"), Gym: "city", Name: "BODYBALANCE", Location: "Studio 1", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+3, 0, 0, 0, time.UTC), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+4, 0, 0, 0, time.UTC), InsertDateTime: time.Time{}},
-	{UUID: uuid.FromStringOrNil("2d56ed4a-e355-11e6-ac91-5cf9388e20a8"), Gym: "city", Name: "CXWORX", Location: "Studio 2", StartDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+4, 0, 0, 0, time.UTC), EndDateTime: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+5, 0, 0, 0, time.UTC), InsertDateTime: time.Time{}}}
+	{
+		UUID:           uuid.FromStringOrNil("2d50d47a-e355-11e6-ac91-5cf9388e20a4"),
+		Gym:            "city",
+		Name:           "BODYPUMP",
+		Location:       "Studio 1",
+		StartDateTime:  time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.UTC),
+		EndDateTime:    time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.UTC),
+		InsertDateTime: time.Time{},
+	},
+	{
+		UUID:           uuid.FromStringOrNil("2d50d480-e355-11e6-ac91-5cf9388e20a5"),
+		Gym:            "city",
+		Name:           "RPM",
+		Location:       "RPM Studio",
+		StartDateTime:  time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.UTC),
+		EndDateTime:    time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.UTC),
+		InsertDateTime: time.Time{},
+	},
+	{
+		UUID:           uuid.FromStringOrNil("2d50d483-e355-11e6-ac91-5cf9388e20a6"),
+		Gym:            "city",
+		Name:           "RPM",
+		Location:       "RPM Studio",
+		StartDateTime:  time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.UTC),
+		EndDateTime:    time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+2, 0, 0, 0, time.UTC),
+		InsertDateTime: time.Time{},
+	},
+	{
+		UUID:           uuid.FromStringOrNil("2d50d486-e355-11e6-ac91-5cf9388e20a7"),
+		Gym:            "city",
+		Name:           "BODYBALANCE",
+		Location:       "Studio 1",
+		StartDateTime:  time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+3, 0, 0, 0, time.UTC),
+		EndDateTime:    time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+4, 0, 0, 0, time.UTC),
+		InsertDateTime: time.Time{}},
+	{
+		UUID:           uuid.FromStringOrNil("2d56ed4a-e355-11e6-ac91-5cf9388e20a8"),
+		Gym:            "city",
+		Name:           "CXWORX",
+		Location:       "Studio 2",
+		StartDateTime:  time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+4, 0, 0, 0, time.UTC),
+		EndDateTime:    time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+5, 0, 0, 0, time.UTC),
+		InsertDateTime: time.Time{}},
+}
+
+func init() {
+	_ = os.Setenv("DEBUG", "true")
+}
+
+func TestGetClasses(t *testing.T) {
+	c, err := GetClasses(Gyms)
+	fmt.Printf("Returned %d classes from Les Mills\n", len(c))
+	assert.NoError(t, err, "Got an error when returning classes")
+	assert.Condition(t, func() (success bool) { return len(c) > 10 }, "Received less than 10 classes")
+}
 
 type parseICSTest struct {
 	icsPath  string
@@ -26,38 +76,159 @@ type parseICSTest struct {
 	expected []GymClass
 }
 
+// This does a comparison and ignores UUIDs
+func compareGymClasses(a []GymClass, b []GymClass) (success bool) {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, _ := range a {
+		if a[k].Gym != b[k].Gym {
+			fmt.Printf("Gyms not equal:\n %s %s\n", a[k], b[k])
+			return false
+		}
+		if a[k].Name != b[k].Name {
+			fmt.Printf("Names not equal:\n %s %s\n", a[k], b[k])
+			return false
+		}
+		if a[k].Location != b[k].Location {
+			fmt.Printf("Locations not equal:\n %s %s\n", a[k], b[k])
+			return false
+		}
+		if !(a[k].StartDateTime.Equal(b[k].StartDateTime)) {
+			fmt.Printf("StartDateTime not equal:\n %s %s\n", a[k], b[k])
+			return false
+		}
+		if !(a[k].EndDateTime.Equal(b[k].EndDateTime)) {
+			fmt.Printf("EndDateTime not equal:\n %s %s\n", a[k], b[k])
+			return false
+		}
+
+	}
+	return true
+
+}
+
 func TestParseICS(t *testing.T) {
-	loc, _ := time.LoadLocation("Pacific/Auckland")
 	parseICSTests := []parseICSTest{
 		{
 			icsPath: "city.ics",
 			gym:     Gym{Name: "city", ID: "96382586-e31c-df11-9eaa-0050568522bb"},
 			expected: []GymClass{
-				{Gym: "city", Name: "BODYPUMP", Location: "Studio 1", StartDateTime: time.Date(2016, 12, 18, 8, 10, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 10, 0, 0, loc), InsertDateTime: time.Time{}},
-				{Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(2016, 12, 18, 8, 20, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 05, 0, 0, loc), InsertDateTime: time.Time{}},
-				{Gym: "city", Name: "CXWORX", Location: "Studio 2", StartDateTime: time.Date(2016, 12, 18, 9, 0, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 30, 0, 0, loc), InsertDateTime: time.Time{}},
-				{Gym: "city", Name: "BODYBALANCE", Location: "Studio 1", StartDateTime: time.Date(2016, 12, 18, 9, 10, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 10, 10, 0, 0, loc), InsertDateTime: time.Time{}},
-				{Gym: "city", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(2016, 12, 18, 9, 20, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 10, 20, 0, 0, loc), InsertDateTime: time.Time{}}}},
+				{
+					Gym:            "city",
+					Name:           "BODYPUMP",
+					Location:       "Studio 1",
+					StartDateTime:  time.Date(2016, 12, 18, 8, 10, 0, 0, time.Local),
+					EndDateTime:    time.Date(2016, 12, 18, 9, 10, 0, 0, time.Local),
+					InsertDateTime: time.Time{}},
+				{
+					Gym:            "city",
+					Name:           "RPM",
+					Location:       "RPM Studio",
+					StartDateTime:  time.Date(2016, 12, 18, 8, 20, 0, 0, time.Local),
+					EndDateTime:    time.Date(2016, 12, 18, 9, 05, 0, 0, time.Local),
+					InsertDateTime: time.Time{}},
+				{
+					Gym:            "city",
+					Name:           "CXWORX",
+					Location:       "Studio 2",
+					StartDateTime:  time.Date(2016, 12, 18, 9, 0, 0, 0, time.Local),
+					EndDateTime:    time.Date(2016, 12, 18, 9, 30, 0, 0, time.Local),
+					InsertDateTime: time.Time{}},
+				{
+					Gym:            "city",
+					Name:           "BODYBALANCE",
+					Location:       "Studio 1",
+					StartDateTime:  time.Date(2016, 12, 18, 9, 10, 0, 0, time.Local),
+					EndDateTime:    time.Date(2016, 12, 18, 10, 10, 0, 0, time.Local),
+					InsertDateTime: time.Time{}},
+				{
+					Gym:            "city",
+					Name:           "RPM",
+					Location:       "RPM Studio",
+					StartDateTime:  time.Date(2016, 12, 18, 9, 20, 0, 0, time.Local),
+					EndDateTime:    time.Date(2016, 12, 18, 10, 20, 0, 0, time.Local),
+					InsertDateTime: time.Time{}}}},
 		{
 			icsPath: "newmarket.ics",
 			gym:     Gym{Name: "newmarket", ID: ""},
 			expected: []GymClass{
-				{Gym: "newmarket", Name: "BODYPUMP", Location: "Studio 2", StartDateTime: time.Date(2016, 12, 18, 8, 0, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 0, 0, 0, loc), InsertDateTime: time.Time{}},
-				{Gym: "newmarket", Name: "RPM", Location: "CHAIN Studio", StartDateTime: time.Date(2016, 12, 18, 8, 30, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 15, 0, 0, loc), InsertDateTime: time.Time{}},
-				{Gym: "newmarket", Name: "BODYBALANCE", Location: "Studio 1", StartDateTime: time.Date(2016, 12, 18, 9, 0, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 10, 0, 0, 0, loc), InsertDateTime: time.Time{}},
-				{Gym: "newmarket", Name: "CXWORX", Location: "Studio 2", StartDateTime: time.Date(2016, 12, 18, 9, 30, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 10, 0, 0, 0, loc), InsertDateTime: time.Time{}},
-				{Gym: "newmarket", Name: "CXWORX", Location: "Studio 2", StartDateTime: time.Date(2016, 12, 25, 17, 45, 0, 0, loc), EndDateTime: time.Date(2016, 12, 25, 18, 15, 0, 0, loc), InsertDateTime: time.Time{}},
+				{
+					Gym:            "newmarket",
+					Name:           "BODYPUMP",
+					Location:       "Studio 2",
+					StartDateTime:  time.Date(2016, 12, 18, 8, 0, 0, 0, time.Local),
+					EndDateTime:    time.Date(2016, 12, 18, 9, 0, 0, 0, time.Local),
+					InsertDateTime: time.Time{}},
+				{
+					Gym:            "newmarket",
+					Name:           "RPM",
+					Location:       "CHAIN Studio",
+					StartDateTime:  time.Date(2016, 12, 18, 8, 30, 0, 0, time.Local),
+					EndDateTime:    time.Date(2016, 12, 18, 9, 15, 0, 0, time.Local),
+					InsertDateTime: time.Time{}},
+				{
+					Gym:            "newmarket",
+					Name:           "BODYBALANCE",
+					Location:       "Studio 1",
+					StartDateTime:  time.Date(2016, 12, 18, 9, 0, 0, 0, time.Local),
+					EndDateTime:    time.Date(2016, 12, 18, 10, 0, 0, 0, time.Local),
+					InsertDateTime: time.Time{}},
+				{
+					Gym:            "newmarket",
+					Name:           "CXWORX",
+					Location:       "Studio 2",
+					StartDateTime:  time.Date(2016, 12, 18, 9, 30, 0, 0, time.Local),
+					EndDateTime:    time.Date(2016, 12, 18, 10, 0, 0, 0, time.Local),
+					InsertDateTime: time.Time{}},
+				{
+					Gym:            "newmarket",
+					Name:           "CXWORX",
+					Location:       "Studio 2",
+					StartDateTime:  time.Date(2016, 12, 25, 17, 45, 0, 0, time.Local),
+					EndDateTime:    time.Date(2016, 12, 25, 18, 15, 0, 0, time.Local),
+					InsertDateTime: time.Time{}},
 			},
 		},
 		{
 			icsPath: "takapuna.ics",
 			gym:     Gym{Name: "takapuna", ID: ""},
 			expected: []GymClass{
-				{Gym: "takapuna", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(2016, 12, 18, 7, 0, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 7, 30, 0, 0, loc), InsertDateTime: time.Time{}},
-				{Gym: "takapuna", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(2016, 12, 18, 8, 0, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 8, 45, 0, 0, loc), InsertDateTime: time.Time{}},
-				{Gym: "takapuna", Name: "BODYBALANCE", Location: "Studio 1", StartDateTime: time.Date(2016, 12, 18, 8, 0, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 8, 55, 0, 0, loc), InsertDateTime: time.Time{}},
-				{Gym: "takapuna", Name: "BODYPUMP", Location: "Studio 1", StartDateTime: time.Date(2016, 12, 18, 9, 0, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 55, 0, 0, loc), InsertDateTime: time.Time{}},
-				{Gym: "takapuna", Name: "RPM", Location: "RPM Studio", StartDateTime: time.Date(2016, 12, 18, 9, 15, 0, 0, loc), EndDateTime: time.Date(2016, 12, 18, 9, 45, 0, 0, loc), InsertDateTime: time.Time{}},
+				{
+					Gym:            "takapuna",
+					Name:           "RPM",
+					Location:       "RPM Studio",
+					StartDateTime:  time.Date(2016, 12, 18, 7, 0, 0, 0, time.Local),
+					EndDateTime:    time.Date(2016, 12, 18, 7, 30, 0, 0, time.Local),
+					InsertDateTime: time.Time{}},
+				{
+					Gym:            "takapuna",
+					Name:           "RPM",
+					Location:       "RPM Studio",
+					StartDateTime:  time.Date(2016, 12, 18, 8, 0, 0, 0, time.Local),
+					EndDateTime:    time.Date(2016, 12, 18, 8, 45, 0, 0, time.Local),
+					InsertDateTime: time.Time{}},
+				{
+					Gym:            "takapuna",
+					Name:           "BODYBALANCE",
+					Location:       "Studio 1",
+					StartDateTime:  time.Date(2016, 12, 18, 8, 0, 0, 0, time.Local),
+					EndDateTime:    time.Date(2016, 12, 18, 8, 55, 0, 0, time.Local),
+					InsertDateTime: time.Time{}},
+				{
+					Gym:            "takapuna",
+					Name:           "BODYPUMP",
+					Location:       "Studio 1",
+					StartDateTime:  time.Date(2016, 12, 18, 9, 0, 0, 0, time.Local),
+					EndDateTime:    time.Date(2016, 12, 18, 9, 55, 0, 0, time.Local),
+					InsertDateTime: time.Time{}},
+				{
+					Gym:            "takapuna",
+					Name:           "RPM",
+					Location:       "RPM Studio",
+					StartDateTime:  time.Date(2016, 12, 18, 9, 15, 0, 0, time.Local),
+					EndDateTime:    time.Date(2016, 12, 18, 9, 45, 0, 0, time.Local),
+					InsertDateTime: time.Time{}},
 			},
 		},
 	}
@@ -75,9 +246,7 @@ func TestParseICS(t *testing.T) {
 			if err != nil {
 				t.Errorf("Error found when parsing ICS %s", err)
 			}
-			for k, v := range classes {
-				assert.Equal(t, test.expected[k], v, "Failed to parse ICS")
-			}
+			assert.Condition(t, func() (success bool) { return compareGymClasses(classes, test.expected) }, "Did not receive the expected classes")
 		}
 	}
 }
@@ -108,11 +277,36 @@ func TestQueryClasses(t *testing.T) {
 	defer testConfig.DB.Close()
 
 	queryClassTests := []queryClassTest{
-		{query: GymQuery{Gym: []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}}, Class: []string{"RPM"}, Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 2},
-		{query: GymQuery{Gym: []Gym{Gym{"britomart", "96382586-e31c-df11-9eaa-0050568522bb"}}, Class: []string{"RPM"}, Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 0},
-		{query: GymQuery{Gym: []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}}, Class: []string{"CXWORX"}, Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 1},
-		{query: GymQuery{Gym: []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}}, Class: []string{"RPM"}, Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2020, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 0},
-		{query: GymQuery{Gym: []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}}, Class: []string{"RPM"}, Before: time.Date(2015, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, expectedClassCount: 0},
+		{query: GymQuery{
+			Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}},
+			Class:  []string{"RPM"},
+			Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
+			After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
+			expectedClassCount: 2},
+		{query: GymQuery{
+			Gym:    []Gym{Gym{"britomart", "96382586-e31c-df11-9eaa-0050568522bb"}},
+			Class:  []string{"RPM"},
+			Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
+			After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
+			expectedClassCount: 0},
+		{query: GymQuery{
+			Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}},
+			Class:  []string{"CXWORX"},
+			Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
+			After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
+			expectedClassCount: 1},
+		{query: GymQuery{
+			Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}},
+			Class:  []string{"RPM"},
+			Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
+			After:  time.Date(2020, 0, 0, 0, 0, 0, 0, time.UTC)},
+			expectedClassCount: 0},
+		{query: GymQuery{
+			Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}},
+			Class:  []string{"RPM"},
+			Before: time.Date(2015, 01, 01, 01, 01, 01, 01, time.UTC),
+			After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
+			expectedClassCount: 0},
 	}
 
 	for _, test := range queryClassTests {
@@ -139,7 +333,12 @@ func TestStoreUserClass(t *testing.T) {
 	}
 	defer testConfig.DB.Close()
 
-	allClasses, _ := QueryClasses(GymQuery{Gym: []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}}, Class: nil, Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, testConfig)
+	allClasses, _ := QueryClasses(GymQuery{
+		Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}},
+		Class:  nil,
+		Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
+		After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
+		testConfig)
 	storeUserClassTests := []storeUserClassTest{
 		{"123", allClasses[0]},
 		{"123", allClasses[1]},
@@ -191,7 +390,14 @@ func TestQueryUserPreferences(t *testing.T) {
 	}
 	defer testConfig.DB.Close()
 	queryUserPreferencesTests := []queryUserPreferencesTest{
-		{"123", UserPreference{PreferredGym: "city", PreferredClass: "RPM", PreferredTime: now.Hour(), PreferredDay: int(now.Weekday())}},
+		{
+			"123",
+			UserPreference{
+				PreferredGym:   "city",
+				PreferredClass: "RPM",
+				PreferredTime:  now.Hour(),
+				PreferredDay:   int(now.Weekday())},
+		},
 	}
 
 	for _, test := range queryUserPreferencesTests {
@@ -217,7 +423,14 @@ func TestQueryPreferredClassesTest(t *testing.T) {
 	defer testConfig.DB.Close()
 
 	var queryPreferredClassesTests = []queryPreferredClassesTest{
-		{UserPreference{User: "123", PreferredGym: "city", PreferredClass: "RPM", PreferredTime: now.Hour() + 2, PreferredDay: int(now.Weekday())}, 2},
+		{
+			UserPreference{
+				User:           "123",
+				PreferredGym:   "city",
+				PreferredClass: "RPM",
+				PreferredTime:  now.Hour() + 2,
+				PreferredDay:   int(now.Weekday())},
+			2},
 	}
 
 	for _, test := range queryPreferredClassesTests {
@@ -245,8 +458,28 @@ func TestQueryUserStatistics(t *testing.T) {
 	city := GetGymByName("city")
 	_, week := now.ISOWeek()
 	queryUserStatistics := []queryUserStatisticsTest{
-		{"123", UserStatistics{TotalClasses: 4, ClassesPerWeek: 32, LastClassDate: time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+3, 0, 0, 0, time.UTC), GymPreferences: []GymPreference{{Gym: city, Preference: 1.0}},
-			ClassPreferences: []ClassPreference{{"BODYPUMP", 0.25}, {"RPM", 0.5}, {"BODYBALANCE", 0.25}}, WorkOutFrequency: []WorkOutFrequency{{week, 4}}}},
+		{
+			"123",
+			UserStatistics{
+				TotalClasses:   4,
+				ClassesPerWeek: 32,
+				LastClassDate:  time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+3, 0, 0, 0, time.UTC),
+				GymPreferences: []GymPreference{
+					{
+						Gym:        city,
+						Preference: 1.0,
+					},
+				},
+				ClassPreferences: []ClassPreference{
+					{"BODYPUMP", 0.25},
+					{"RPM", 0.5},
+					{"BODYBALANCE", 0.25},
+				},
+				WorkOutFrequency: []WorkOutFrequency{
+					{week, 4},
+				},
+			},
+		},
 	}
 
 	for _, test := range queryUserStatistics {
@@ -255,7 +488,7 @@ func TestQueryUserStatistics(t *testing.T) {
 			t.Errorf("Failed to get stats for user %s", err)
 		}
 
-		assert.Equal(t, stats, test.stats, "User stats were not the same as expected")
+		assert.Condition(t, func() (success bool) { return reflect.DeepEqual(test.stats, stats) }, "User stats were not the same as expected")
 	}
 
 }
@@ -273,7 +506,13 @@ func TestDeleteUserClass(t *testing.T) {
 	}
 
 	allClasses, _ := QueryClasses(GymQuery{
-		Gym: []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}}, Class: nil, Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC), After: time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)}, testConfig)
+		Gym: []Gym{
+			Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"},
+		},
+		Class:  nil,
+		Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
+		After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
+		testConfig)
 
 	deleteUserClassTests := []deleteUserClassTest{
 		{"123", allClasses[0]},
