@@ -129,7 +129,7 @@ func (g GymClasses) OldestClass() GymClass {
 
 // LatestClass returns the latest class date in the slice
 func (g GymClasses) LatestClass() GymClass {
-	var latest = time.Date(0, 0, 0, 0, 0, 0, 0, time.Local)
+	var latest = time.Date(0, 0, 0, 0, 0, 0, 0, time.UTC)
 	var lc GymClass
 	for _, c := range g {
 		if c.StartDateTime.After(latest) {
@@ -676,13 +676,13 @@ func DeleteUserClass(user string, class uuid.UUID, dbConfig *Config) error {
 }
 
 // QueryClassesByName will take a query string and try parse out the correct query and return the results
-func QueryClassesByName(query string, dbConfig *Config) (GymClasses, error) {
+func QueryClassesByName(query string, dbConfig *Config) (GymQuery, error) {
 
 	log.Infof("Querying wit.ai for '%s'", query)
 	accessToken := os.Getenv("WIT_ACCESS_TOKEN")
 	if accessToken == "" {
 		log.Error("Failed to get access token from environment vars")
-		return GymClasses{}, errors.New("No access token found for Wit.ai, please set the environment variable WIT_ACCESS_TOKEN")
+		return GymQuery{}, errors.New("No access token found for Wit.ai, please set the environment variable WIT_ACCESS_TOKEN")
 	}
 	client := wit.NewClient(accessToken)
 	request := &wit.MessageRequest{}
@@ -690,19 +690,16 @@ func QueryClassesByName(query string, dbConfig *Config) (GymClasses, error) {
 	result, err := client.Message(request)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to query wit.ai")
-		return GymClasses{}, errors.New("Failed to query wit.ai")
+		return GymQuery{}, errors.New("Failed to query wit.ai")
 	}
 
-	classes := make(GymClasses, 0)
+	var gymQuery GymQuery
 	if len(result.Outcomes) >= 1 {
 		outcome := result.Outcomes[0]
 		class := outcome.Entities["agenda_entry"]
 		datetime := outcome.Entities["datetime"]
 		location := outcome.Entities["location"]
 
-		gymQuery := GymQuery{}
-
-		// TODO: Fix this to support multiple locations
 		if len(location) >= 1 {
 			gymName := fmt.Sprintf("%v", *location[0].Value)
 			gymQuery.Gym = append(gymQuery.Gym, GetGymByName(gymName))
@@ -710,7 +707,6 @@ func QueryClassesByName(query string, dbConfig *Config) (GymClasses, error) {
 			gymQuery.Gym = []Gym{}
 		}
 
-		// TODO: Fix this to support multiple classes
 		if len(class) >= 1 {
 			cls := fmt.Sprintf("%v", *class[0].Value)
 			cla := strings.Split(cls, " ")
@@ -781,18 +777,12 @@ func QueryClassesByName(query string, dbConfig *Config) (GymClasses, error) {
 			log.Infof("Couldn't find a datetime so parsing as range %v to %v", gymQuery.After, gymQuery.Before)
 		}
 
-		classes, err = QueryClasses(gymQuery, dbConfig)
-		if err != nil {
-			log.WithFields(log.Fields{"error": err}).Error("Failed to find classes")
-			return GymClasses{}, errors.New("Failed to find classes")
-		}
-	} else {
-		log.Info("Failed to get a response from wit.ai")
-		classes := GymClasses{}
-		return classes, errors.New("Failed to find any classes")
+		return gymQuery, nil
+
 	}
 
-	return classes, nil
+	log.Info("Failed to get a response from wit.ai")
+	return GymQuery{}, errors.New("Failed to find any classes")
 }
 
 // QueryClasses will query the classes from the stored database and return the results

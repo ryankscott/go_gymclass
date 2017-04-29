@@ -56,6 +56,15 @@ var testClasses = []GymClass{
 		Location:       "Studio 2",
 		StartDateTime:  time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+4, 0, 0, 0, time.UTC),
 		EndDateTime:    time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+5, 0, 0, 0, time.UTC),
+		InsertDateTime: time.Time{},
+	},
+	{
+		UUID:           uuid.FromStringOrNil("4175B894-F02E-4DA2-BA7B-563307B2D8A9"),
+		Gym:            "britomart",
+		Name:           "RPM",
+		Location:       "RPM Studio",
+		StartDateTime:  time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.UTC),
+		EndDateTime:    time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+2, 0, 0, 0, time.UTC),
 		InsertDateTime: time.Time{}},
 }
 
@@ -76,7 +85,7 @@ type parseICSTest struct {
 	expected []GymClass
 }
 
-// This does a comparison and ignores UUIDs
+// Compares two slices of GymClasses but ignores UUIDs
 func compareGymClasses(a []GymClass, b []GymClass) (success bool) {
 	if len(a) != len(b) {
 		return false
@@ -106,6 +115,35 @@ func compareGymClasses(a []GymClass, b []GymClass) (success bool) {
 	}
 	return true
 
+}
+
+// Compares two UserStatistics ignoring map order
+func compareUserStatistics(a UserStatistics, b UserStatistics) (success bool) {
+	if a.ClassesPerWeek != b.ClassesPerWeek {
+		fmt.Printf("Classes per week were not the same: %v, %v\n", a.ClassesPerWeek, b.ClassesPerWeek)
+		return false
+	}
+	if !a.LastClassDate.Equal(b.LastClassDate) {
+		fmt.Printf("LastClassDate were not the same: %v, %v\n", a.LastClassDate, b.LastClassDate)
+		return false
+	}
+	if a.TotalClasses != b.TotalClasses {
+		fmt.Printf("TotalClasses were not the same: %v, %v\n", a.TotalClasses, b.TotalClasses)
+		return false
+	}
+	if !reflect.DeepEqual(a.ClassPreferences, b.ClassPreferences) {
+		fmt.Printf("ClassPreferences were not the same: %v, %v\n", a.ClassPreferences, b.ClassPreferences)
+		return false
+	}
+	if !reflect.DeepEqual(a.WorkOutFrequency, b.WorkOutFrequency) {
+		fmt.Printf("WorkOutFrequency were not the same: %v, %v\n", a.WorkOutFrequency, b.WorkOutFrequency)
+		return false
+	}
+	if !reflect.DeepEqual(a.GymPreferences, b.GymPreferences) {
+		fmt.Printf("GymPreferences were not the same: %v, %v\n", a.GymPreferences, b.GymPreferences)
+		return false
+	}
+	return true
 }
 
 func TestParseICS(t *testing.T) {
@@ -264,8 +302,9 @@ func TestStoreClasses(t *testing.T) {
 }
 
 type queryClassTest struct {
-	query              GymQuery
-	expectedClassCount int
+	Name               string
+	Query              GymQuery
+	ExpectedClassCount int
 }
 
 func TestQueryClasses(t *testing.T) {
@@ -277,44 +316,70 @@ func TestQueryClasses(t *testing.T) {
 	defer testConfig.DB.Close()
 
 	queryClassTests := []queryClassTest{
-		{query: GymQuery{
-			Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}},
-			Class:  []string{"RPM"},
-			Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
-			After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
-			expectedClassCount: 2},
-		{query: GymQuery{
-			Gym:    []Gym{Gym{"britomart", "96382586-e31c-df11-9eaa-0050568522bb"}},
-			Class:  []string{"RPM"},
-			Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
-			After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
-			expectedClassCount: 0},
-		{query: GymQuery{
-			Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}},
-			Class:  []string{"CXWORX"},
-			Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
-			After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
-			expectedClassCount: 1},
-		{query: GymQuery{
-			Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}},
-			Class:  []string{"RPM"},
-			Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
-			After:  time.Date(2020, 0, 0, 0, 0, 0, 0, time.UTC)},
-			expectedClassCount: 0},
-		{query: GymQuery{
-			Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}},
-			Class:  []string{"RPM"},
-			Before: time.Date(2015, 01, 01, 01, 01, 01, 01, time.UTC),
-			After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
-			expectedClassCount: 0},
+		{
+			Name: "Good Gym and Class - Expected classes",
+			Query: GymQuery{
+				Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}},
+				Class:  []string{"RPM"},
+				Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
+				After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
+			ExpectedClassCount: 2},
+		{
+			Name: "Bad Gym, Good Class - No classes",
+			Query: GymQuery{
+				Gym:    []Gym{Gym{"takapuna", "98382586-e31c-df11-9eaa-0050568522bb"}},
+				Class:  []string{"RPM"},
+				Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
+				After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
+			ExpectedClassCount: 0},
+		{
+			Name: "Good Gym, Good class - Expected classes",
+			Query: GymQuery{
+				Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}},
+				Class:  []string{"CXWORX"},
+				Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
+				After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
+			ExpectedClassCount: 1},
+		{
+			Name: "Good Gym, Good Class, In future - No classes",
+			Query: GymQuery{
+				Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}},
+				Class:  []string{"RPM"},
+				Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
+				After:  time.Date(2020, 0, 0, 0, 0, 0, 0, time.UTC)},
+			ExpectedClassCount: 0},
+		{
+			Name: "Good Gym, Good Class, In past - No classes",
+			Query: GymQuery{
+				Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}},
+				Class:  []string{"RPM"},
+				Before: time.Date(2015, 01, 01, 01, 01, 01, 01, time.UTC),
+				After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
+			ExpectedClassCount: 0},
+		{
+			Name: "Good Gym, Multiple Classes - Expected classes",
+			Query: GymQuery{
+				Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}},
+				Class:  []string{"RPM", "BODYPUMP"},
+				Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
+				After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
+			ExpectedClassCount: 3},
+		{
+			Name: "Multiple Gym, Single Class - Expected classes",
+			Query: GymQuery{
+				Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}, Gym{"britomart", "744366a6-c70b-e011-87c7-0050568522bb"}},
+				Class:  []string{"RPM"},
+				Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
+				After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
+			ExpectedClassCount: 2},
 	}
 
 	for _, test := range queryClassTests {
-		classes, err := QueryClasses(test.query, testConfig)
+		classes, err := QueryClasses(test.Query, testConfig)
 		if err != nil {
 			t.Errorf("Failed to query classes %s", err)
 		}
-		assert.Equal(t, test.expectedClassCount, len(classes), "Did not get expected classes when querying")
+		assert.Equal(t, test.ExpectedClassCount, len(classes), "Failed %s test - Did not get expected classes when querying", test.Name)
 
 	}
 
@@ -430,7 +495,7 @@ func TestQueryPreferredClassesTest(t *testing.T) {
 				PreferredClass: "RPM",
 				PreferredTime:  now.Hour() + 2,
 				PreferredDay:   int(now.Weekday())},
-			2},
+			3},
 	}
 
 	for _, test := range queryPreferredClassesTests {
@@ -488,7 +553,7 @@ func TestQueryUserStatistics(t *testing.T) {
 			t.Errorf("Failed to get stats for user %s", err)
 		}
 
-		assert.Condition(t, func() (success bool) { return reflect.DeepEqual(test.stats, stats) }, "User stats were not the same as expected")
+		assert.Condition(t, func() (success bool) { return compareUserStatistics(test.stats, stats) }, "User stats were not the same as expected:\n %v \n %v", test.stats, stats)
 	}
 
 }
