@@ -700,6 +700,7 @@ func QueryClassesByName(query string, dbConfig *Config) (GymQuery, error) {
 		datetime := outcome.Entities["datetime"]
 		location := outcome.Entities["location"]
 
+		// Parse Gyms
 		if len(location) >= 1 {
 			gymName := fmt.Sprintf("%v", *location[0].Value)
 			gymQuery.Gym = append(gymQuery.Gym, GetGymByName(gymName))
@@ -707,6 +708,7 @@ func QueryClassesByName(query string, dbConfig *Config) (GymQuery, error) {
 			gymQuery.Gym = []Gym{}
 		}
 
+		// Parse class name
 		if len(class) >= 1 {
 			cls := fmt.Sprintf("%v", *class[0].Value)
 			cla := strings.Split(cls, " ")
@@ -719,6 +721,8 @@ func QueryClassesByName(query string, dbConfig *Config) (GymQuery, error) {
 		} else {
 			gymQuery.Class = []string{}
 		}
+
+		// Parse dates
 		if len(datetime) >= 1 {
 			// If it is a date range
 			if *datetime[0].Type == "interval" {
@@ -777,6 +781,7 @@ func QueryClassesByName(query string, dbConfig *Config) (GymQuery, error) {
 			log.Infof("Couldn't find a datetime so parsing as range %v to %v", gymQuery.After, gymQuery.Before)
 		}
 
+		log.Infof("Returning the following query: %v \n", gymQuery)
 		return gymQuery, nil
 
 	}
@@ -867,9 +872,9 @@ func classInQuery(query GymQuery, class GymClass) bool {
 				gExists = true
 				break
 			}
-			if !gExists {
-				return false
-			}
+		}
+		if !gExists {
+			return false
 		}
 
 	}
