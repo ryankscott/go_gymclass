@@ -8,14 +8,13 @@ import (
 	"time"
 
 	ics "github.com/PuloV/ics-golang"
-	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 )
 
 var now = time.Now().UTC()
 var testClasses = []GymClass{
 	{
-		UUID:           uuid.FromStringOrNil("2d50d47a-e355-11e6-ac91-5cf9388e20a4"),
+		UUID:           "20390885B9E11866C66C1E3177E66C8A61F9598415E147C55B0B320B2654705B",
 		Gym:            "city",
 		Name:           "BODYPUMP",
 		Location:       "Studio 1",
@@ -24,7 +23,7 @@ var testClasses = []GymClass{
 		InsertDateTime: time.Time{},
 	},
 	{
-		UUID:           uuid.FromStringOrNil("2d50d480-e355-11e6-ac91-5cf9388e20a5"),
+		UUID:           "F329A1C78FE5DF1099BDB8D6790BBD9015CFBB65BAB0F0C56BFFEF6EB0CE15CC",
 		Gym:            "city",
 		Name:           "RPM",
 		Location:       "RPM Studio",
@@ -33,7 +32,7 @@ var testClasses = []GymClass{
 		InsertDateTime: time.Time{},
 	},
 	{
-		UUID:           uuid.FromStringOrNil("2d50d483-e355-11e6-ac91-5cf9388e20a6"),
+		UUID:           "F329A1C78FE5DF1099BDB8D6790BBD9015CFBB65BAB0F0C56BFFEF6EB0CE15CD",
 		Gym:            "city",
 		Name:           "RPM",
 		Location:       "RPM Studio",
@@ -42,7 +41,7 @@ var testClasses = []GymClass{
 		InsertDateTime: time.Time{},
 	},
 	{
-		UUID:           uuid.FromStringOrNil("2d50d486-e355-11e6-ac91-5cf9388e20a7"),
+		UUID:           "F329A1C78FE5DF1099BDB8D6790BBD9015CFBB65BAB0F0C56BFFEF6EB0CE15CE",
 		Gym:            "city",
 		Name:           "BODYBALANCE",
 		Location:       "Studio 1",
@@ -50,7 +49,7 @@ var testClasses = []GymClass{
 		EndDateTime:    time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+4, 0, 0, 0, time.UTC),
 		InsertDateTime: time.Time{}},
 	{
-		UUID:           uuid.FromStringOrNil("2d56ed4a-e355-11e6-ac91-5cf9388e20a8"),
+		UUID:           "F329A1C78FE5DF1099BDB8D6790BBD9015CFBB65BAB0F0C56BFFEF6EB0CE15CF",
 		Gym:            "city",
 		Name:           "CXWORX",
 		Location:       "Studio 2",
@@ -59,7 +58,7 @@ var testClasses = []GymClass{
 		InsertDateTime: time.Time{},
 	},
 	{
-		UUID:           uuid.FromStringOrNil("4175B894-F02E-4DA2-BA7B-563307B2D8A9"),
+		UUID:           "F329A1C78FE5DF1099BDB8D6790BBD9015CFBB65BAB0F0C56BFFEF6EB0CE15C9",
 		Gym:            "britomart",
 		Name:           "RPM",
 		Location:       "RPM Studio",

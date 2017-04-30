@@ -1,6 +1,7 @@
 package lm
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -85,7 +86,7 @@ var Classes = []string{
 
 // GymClass describes a class at Les Mills
 type GymClass struct {
-	UUID           uuid.UUID `json:"uuid" db:"uuid"`
+	UUID           string    `json:"uuid" db:"uuid"`
 	Gym            string    `json:"gym" db:"gym"`
 	Name           string    `json:"name" db:"name"`
 	Location       string    `json:"location" db:"location"`
@@ -99,7 +100,7 @@ type GymClasses []GymClass
 
 // Delete will remove a GymClass from the GymClasses slice by UUID
 // It will returna boolean representing the success of the operation
-func (g GymClasses) Delete(classID uuid.UUID) bool {
+func (g GymClasses) Delete(classID string) bool {
 	for i, v := range g {
 		if v.UUID == classID {
 			g = append(g[:i], g[i+1:]...)
@@ -390,8 +391,10 @@ func parseICS(cal *ics.Calendar, gym Gym) (GymClasses, error) {
 		endDateTime := time.Date(end.Year(), end.Month(), end.Day(), end.Hour(), end.Minute(), end.Second(), 0, loc)
 		name := event.GetSummary()
 		translateName(&name)
+		id := fmt.Sprintf("%s%s%s%s", gym.Name, name, event.GetLocation(), startDateTime)
+		u := sha256.Sum256([]byte(id))
 		foundClass = GymClass{
-			UUID:          uuid.NewV4(),
+			UUID:          fmt.Sprintf("%x", u),
 			Gym:           gym.Name,
 			Name:          name,
 			Location:      event.GetLocation(),
@@ -445,7 +448,7 @@ func StoreClasses(classes GymClasses, dbConfig *Config) error {
 		}
 		err = dbConfig.DB.Update(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte("Classes"))
-			err := b.Put([]byte(class.UUID.String()), c)
+			err := b.Put([]byte(class.UUID), c)
 			if err != nil {
 				log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to store class into db")
 				return err
@@ -566,7 +569,7 @@ func QueryPreferredClasses(preference UserPreference, dbConfig *Config) (GymClas
 
 	allClasses := append(queryClasses1, queryClasses2...)
 
-	var encountered = map[uuid.UUID]bool{}
+	var encountered = map[string]bool{}
 	var deDuped = GymClasses{}
 	for _, class := range allClasses {
 		if encountered[class.UUID] == true {
@@ -581,13 +584,13 @@ func QueryPreferredClasses(preference UserPreference, dbConfig *Config) (GymClas
 }
 
 // StoreUserClass will store a class against a user in the database
-func StoreUserClass(user string, classID uuid.UUID, dbConfig *Config) error {
+func StoreUserClass(user string, classID string, dbConfig *Config) error {
 	// Bolt DB get class from ID
 	var c GymClass
 	err := dbConfig.DB.View(func(tx *bolt.Tx) error {
 		// Assume bucket exists and has keys
 		b := tx.Bucket([]byte("Classes"))
-		v := b.Get([]byte(classID.String()))
+		v := b.Get([]byte(classID))
 		err := json.Unmarshal(v, &c)
 		if err != nil {
 			log.WithFields(log.Fields{"error": err}).Error("Failed to unmarshal stored class when getting classes")
@@ -637,7 +640,7 @@ func StoreUserClass(user string, classID uuid.UUID, dbConfig *Config) error {
 }
 
 // DeleteUserClass will delete a class for a particular user in the database
-func DeleteUserClass(user string, class uuid.UUID, dbConfig *Config) error {
+func DeleteUserClass(user string, classID string, dbConfig *Config) error {
 	// Bolt DB delete query
 	err := dbConfig.DB.Update(func(tx *bolt.Tx) error {
 		var userClasses GymClasses
@@ -645,30 +648,30 @@ func DeleteUserClass(user string, class uuid.UUID, dbConfig *Config) error {
 		v := b.Get([]byte(user))
 		err := json.Unmarshal(v, &userClasses)
 		if err != nil {
-			log.WithFields(log.Fields{"error": err, "class": class}).Error("Failed to unmarshal classes from bolt db")
+			log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to unmarshal classes from bolt db")
 			return err
 		}
 		// Remove class now
-		ok := userClasses.Delete(class)
+		ok := userClasses.Delete(classID)
 		if !ok {
-			log.WithFields(log.Fields{"error": err, "class": class}).Error("Failed to remove class from slice of classes")
+			log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to remove class from slice of classes")
 			return fmt.Errorf("Failed to remove class from slice of classes")
 
 		}
 		j, err := json.Marshal(userClasses)
 		if err != nil {
-			log.WithFields(log.Fields{"error": err, "class": class}).Error("Failed to marshal classes into bolt db")
+			log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to marshal classes into bolt db")
 			return err
 		}
 		err = b.Put([]byte(user), j)
 		if err != nil {
-			log.WithFields(log.Fields{"error": err, "class": class}).Error("Failed to store user classes in bolt db")
+			log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to store user classes in bolt db")
 			return err
 		}
 		return err
 	})
 	if err != nil {
-		log.WithFields(log.Fields{"error": err, "class": class}).Error("Failed to insert row into bolt db")
+		log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to insert row into bolt db")
 		return err
 	}
 
