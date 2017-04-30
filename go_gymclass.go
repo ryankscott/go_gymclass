@@ -702,21 +702,30 @@ func QueryClassesByName(query string, dbConfig *Config) (GymQuery, error) {
 
 		// Parse Gyms
 		if len(location) >= 1 {
-			gymName := fmt.Sprintf("%v", *location[0].Value)
-			gymQuery.Gym = append(gymQuery.Gym, GetGymByName(gymName))
+			for _, v := range location {
+				gymName := fmt.Sprintf("%v", *v.Value)
+				gymQuery.Gym = append(gymQuery.Gym, GetGymByName(gymName))
+			}
 		} else {
 			gymQuery.Gym = []Gym{}
 		}
 
 		// Parse class name
 		if len(class) >= 1 {
-			cls := fmt.Sprintf("%v", *class[0].Value)
-			cla := strings.Split(cls, " ")
-			if len(cla) > 0 {
-				log.Infof("Found multiple classes %s", cla)
-				gymQuery.Class = append(gymQuery.Class, cla[0])
-			} else {
-				gymQuery.Class = append(gymQuery.Class, cls)
+			// For each class found
+			for _, v := range class {
+				// Save the class as a string
+				cls := fmt.Sprintf("%v", *v.Value)
+				// Split the class name for example "CX WORX" becomes ["CX","WORX"]
+				cla := strings.Split(cls, " ")
+				if len(cla) > 0 {
+					log.Infof("Found multiple classes %s", cla)
+					// Take the first part of the string e.g. "CX"
+					gymQuery.Class = append(gymQuery.Class, cla[0])
+				} else {
+					gymQuery.Class = append(gymQuery.Class, cls)
+				}
+
 			}
 		} else {
 			gymQuery.Class = []string{}
@@ -859,6 +868,7 @@ func classInQuery(query GymQuery, class GymClass) bool {
 			}
 		}
 		if !cExists {
+			log.Debugf("Failed to match class to name")
 			return false
 		}
 	}
@@ -873,6 +883,7 @@ func classInQuery(query GymQuery, class GymClass) bool {
 			}
 		}
 		if !gExists {
+			log.Debugf("Failed to match class to gym")
 			return false
 		}
 
@@ -880,12 +891,15 @@ func classInQuery(query GymQuery, class GymClass) bool {
 	if !query.After.IsZero() {
 		exists := class.StartDateTime.After(query.After)
 		if !exists {
+			log.Debugf("Failed to match class to after time")
 			return false
 		}
 	}
 	if !query.Before.IsZero() {
 		exists := class.StartDateTime.Before(query.Before)
+
 		if !exists {
+			log.Debugf("Failed to match class to before time")
 			return false
 		}
 	}
