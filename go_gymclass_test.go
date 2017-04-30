@@ -131,6 +131,7 @@ func compareUserStatistics(a UserStatistics, b UserStatistics) (success bool) {
 		fmt.Printf("TotalClasses were not the same: %v, %v\n", a.TotalClasses, b.TotalClasses)
 		return false
 	}
+	// These need to iterate through the slice and deep equal each one
 	if !reflect.DeepEqual(a.ClassPreferences, b.ClassPreferences) {
 		fmt.Printf("ClassPreferences were not the same: %v, %v\n", a.ClassPreferences, b.ClassPreferences)
 		return false
@@ -371,7 +372,7 @@ func TestQueryClasses(t *testing.T) {
 				Class:  []string{"RPM"},
 				Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
 				After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
-			ExpectedClassCount: 2},
+			ExpectedClassCount: 3},
 	}
 
 	for _, test := range queryClassTests {

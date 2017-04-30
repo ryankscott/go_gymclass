@@ -781,7 +781,7 @@ func QueryClassesByName(query string, dbConfig *Config) (GymQuery, error) {
 			log.Infof("Couldn't find a datetime so parsing as range %v to %v", gymQuery.After, gymQuery.Before)
 		}
 
-		log.Infof("Returning the following query: %v \n", gymQuery)
+		log.Infof("Returning the following query: %v", gymQuery)
 		return gymQuery, nil
 
 	}
@@ -849,11 +849,10 @@ func GetGymByID(ID string) Gym {
 }
 
 func classInQuery(query GymQuery, class GymClass) bool {
-
 	if len(query.Class) > 0 {
 		cExists := false
 		for _, c := range query.Class {
-			exists := strings.Contains(strings.ToLower(c), strings.ToLower(class.Name))
+			exists := strings.Contains(strings.ToLower(class.Name), strings.ToLower(c))
 			if exists {
 				cExists = true
 				break
