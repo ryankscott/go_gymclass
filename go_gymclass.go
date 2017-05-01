@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	uuid "github.com/satori/go.uuid"
 
 	"github.com/PuloV/ics-golang"
 	log "github.com/Sirupsen/logrus"
@@ -319,8 +318,8 @@ type UserPreference struct {
 
 // UserGymClass describes a saved GymClass by a user
 type UserGymClass struct {
-	User       string    `json:"user" db:"user"`
-	GymClassID uuid.UUID `json:"gymClassUUID" db:"gymclass_uiid"`
+	User       string `json:"user" db:"user"`
+	GymClassID string `json:"gymClassUUID" db:"gymclass_uiid"`
 }
 
 // GymQuery describes a query for GymClasses
