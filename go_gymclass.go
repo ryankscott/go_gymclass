@@ -94,6 +94,31 @@ type GymClass struct {
 	InsertDateTime time.Time `json:"insertdatetime" db:"insert_datetime"`
 }
 
+// InQuery checks to see if the class is within the criteria of the GymQuery
+// Returns true if it meets the critieria otherwise returns false
+func (g GymClass) InQuery(q GymQuery) bool {
+	inName := compareClassName(&q, &g)
+	if !inName {
+		return false
+	}
+
+	inGym := compareClassGym(&q, &g)
+	if !inGym {
+		return false
+	}
+
+	after := compareClassAfterTime(&q, &g)
+	if !after {
+		return false
+	}
+
+	before := compareClassBeforeTime(&q, &g)
+	if !before {
+		return false
+	}
+	return true
+}
+
 // GymClasses describes a collection of GymClass
 type GymClasses []GymClass
 
@@ -735,6 +760,7 @@ func QueryClassesByName(query string, dbConfig *Config) (GymQuery, error) {
 
 		// Parse dates
 		if len(datetime) >= 1 {
+			// We're only going to take the first datetime
 			// If it is a date range
 			if *datetime[0].Type == "interval" {
 				if datetime[0].From != nil {
@@ -745,7 +771,7 @@ func QueryClassesByName(query string, dbConfig *Config) (GymQuery, error) {
 						gymQuery.After = after
 					}
 				} else {
-					gymQuery.After = time.Now().AddDate(0, 0, 0)
+					gymQuery.After = time.Now()
 				}
 				if datetime[0].To != nil {
 					before, err := time.Parse("2006-01-02T15:04:05Z07:00", datetime[0].To.Value)
@@ -762,6 +788,7 @@ func QueryClassesByName(query string, dbConfig *Config) (GymQuery, error) {
 
 				// Else if it's just a value
 			} else if *datetime[0].Type == "value" {
+				// If the type of time value is a day, we're going to assume it's between the time provided and 24 hours in the future
 				if *datetime[0].Grain == "day" {
 					dateVal := (*datetime[0].Value).(string)
 					after, err := time.Parse("2006-01-02T15:04:05Z07:00", dateVal)
@@ -771,6 +798,7 @@ func QueryClassesByName(query string, dbConfig *Config) (GymQuery, error) {
 						gymQuery.After = after
 					}
 					gymQuery.Before = after.AddDate(0, 0, 1)
+					// If it's a type of a week, we assume it's between the time provided and 7 days in the future
 				} else if *datetime[0].Grain == "week" {
 					dateVal := (*datetime[0].Value).(string)
 					after, err := time.Parse("2006-01-02T15:04:05Z07:00", dateVal)
@@ -814,7 +842,7 @@ func QueryClasses(query GymQuery, dbConfig *Config) (GymClasses, error) {
 				log.WithFields(log.Fields{"error": err}).Error("Failed to unmarshal stored class when getting classes")
 				return err
 			}
-			if classInQuery(query, c) {
+			if c.InQuery(query) {
 				allClasses = append(allClasses, c)
 			}
 
@@ -859,53 +887,44 @@ func GetGymByID(ID string) Gym {
 	return Gym{}
 }
 
-func classInQuery(query GymQuery, class GymClass) bool {
-	if len(query.Class) > 0 {
-		cExists := false
-		for _, c := range query.Class {
-			exists := strings.Contains(strings.ToLower(class.Name), strings.ToLower(c))
-			if exists {
-				cExists = true
-				break
-			}
-		}
-		if !cExists {
-			log.Debugf("Failed to match class to name")
-			return false
+func compareClassName(query *GymQuery, class *GymClass) bool {
+	if len(query.Class) == 0 {
+		return true
+	}
+	for _, c := range query.Class {
+		if strings.Contains(strings.ToLower(class.Name), strings.ToLower(c)) {
+			return true
 		}
 	}
+	return false
+}
 
-	if len(query.Gym) > 0 {
-		gExists := false
-		for _, g := range query.Gym {
-			exists := (strings.ToLower(g.Name) == strings.ToLower(class.Gym))
-			if exists {
-				gExists = true
-				break
-			}
+func compareClassGym(query *GymQuery, class *GymClass) bool {
+	if len(query.Gym) == 0 {
+		return true
+	}
+	for _, g := range query.Gym {
+		if strings.ToLower(class.Gym) == strings.ToLower(g.Name) {
+			return true
 		}
-		if !gExists {
-			log.Debugf("Failed to match class to gym")
-			return false
-		}
+	}
+	return false
+}
 
-	}
-	if !query.After.IsZero() {
-		exists := class.StartDateTime.After(query.After)
-		if !exists {
-			log.Debugf("Failed to match class to after time")
-			return false
-		}
-	}
-	if !query.Before.IsZero() {
-		exists := class.StartDateTime.Before(query.Before)
+func compareClassAfterTime(query *GymQuery, class *GymClass) bool {
 
-		if !exists {
-			log.Debugf("Failed to match class to before time")
-			return false
-		}
+	if query.After.IsZero() {
+		return true
 	}
-	return true
+	return class.StartDateTime.After(query.After)
+}
+
+func compareClassBeforeTime(query *GymQuery, class *GymClass) bool {
+
+	if query.Before.IsZero() {
+		return true
+	}
+	return class.StartDateTime.Before(query.Before)
 }
 
 func init() {
