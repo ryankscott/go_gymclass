@@ -12,7 +12,8 @@ import (
 )
 
 var now = time.Now().UTC()
-var testClasses = []GymClass{
+
+var testClasses = GymClasses{
 	{
 		UUID:           "20390885B9E11866C66C1E3177E66C8A61F9598415E147C55B0B320B2654705B",
 		Gym:            "city",
@@ -76,6 +77,25 @@ func TestGetClasses(t *testing.T) {
 	fmt.Printf("Returned %d classes from Les Mills\n", len(c))
 	assert.NoError(t, err, "Got an error when returning classes")
 	assert.Condition(t, func() (success bool) { return len(c) > 10 }, "Received less than 10 classes")
+}
+
+func clearDB(config *Config) error {
+
+	err := config.DB.Drop("GymClass")
+	if err != nil {
+		if err.Error() != "bucket not found" {
+			fmt.Printf("Failed to drop GymClass: %s", err)
+			return err
+		}
+	}
+	err = config.DB.Drop("UserGymClass")
+	if err != nil {
+		if err.Error() != "bucket not found" {
+			fmt.Printf("Failed to drop UserGymClass: %s", err)
+			return err
+		}
+	}
+	return nil
 }
 
 type parseICSTest struct {
@@ -292,13 +312,20 @@ func TestParseICS(t *testing.T) {
 func TestStoreClasses(t *testing.T) {
 	testConfig, err := NewConfig()
 	if err != nil {
-		t.Errorf("Failed to create database %s", err)
+		t.Errorf("Failed to create database: %s", err)
+	}
+	err = clearDB(testConfig)
+	if err != nil {
+		t.Errorf("Failed to clear database: %s", err)
 	}
 	err = StoreClasses(testClasses, testConfig)
 	if err != nil {
-		t.Errorf("Error when storing classes %s", err)
+		t.Errorf("Error when storing classes: %s", err)
+
 	}
+	//TODO: Check that I stored the right number of classes
 	defer testConfig.DB.Close()
+
 }
 
 type queryClassTest struct {
@@ -313,8 +340,16 @@ func TestQueryClasses(t *testing.T) {
 		t.Errorf("Failed to create database %s", err)
 		return
 	}
+	// Clear the DB
+	err = clearDB(testConfig)
+	if err != nil {
+		t.Errorf("Failed to clear database %s", err)
+	}
 	defer testConfig.DB.Close()
-
+	err = StoreClasses(testClasses, testConfig)
+	if err != nil {
+		t.Errorf("Error when storing classes %s", err)
+	}
 	queryClassTests := []queryClassTest{
 		{
 			Name: "Good Gym and Class - Expected classes",
@@ -398,18 +433,26 @@ func TestStoreUserClass(t *testing.T) {
 	}
 	defer testConfig.DB.Close()
 
-	allClasses, _ := QueryClasses(GymQuery{
-		Gym:    []Gym{Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"}},
-		Class:  nil,
-		Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
-		After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
-		testConfig)
+	// Clear the DB
+	err = clearDB(testConfig)
+	if err != nil {
+		t.Errorf("Failed to clear database %s", err)
+	}
+
+	// Store the GymClasess
+	err = StoreClasses(testClasses, testConfig)
+	if err != nil {
+		t.Errorf("Error when storing classes: %s", err)
+
+	}
+
+	// Store the UserGymClasses
 	storeUserClassTests := []storeUserClassTest{
-		{"123", allClasses[0]},
-		{"123", allClasses[1]},
-		{"123", allClasses[2]},
-		{"123", allClasses[3]},
-		{"456", allClasses[4]},
+		{"123", testClasses[0]},
+		{"123", testClasses[1]},
+		{"123", testClasses[2]},
+		{"123", testClasses[3]},
+		{"456", testClasses[4]},
 	}
 	for _, test := range storeUserClassTests {
 		err := StoreUserClass(test.user, test.class.UUID, testConfig)
@@ -427,7 +470,35 @@ func TestQueryUserClasses(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create database %s", err)
 	}
+	// Clear the DB
+	err = clearDB(testConfig)
+	if err != nil {
+		t.Errorf("Failed to clear database %s", err)
+	}
 	defer testConfig.DB.Close()
+	// Store Classes
+	// Store the GymClasess
+	err = StoreClasses(testClasses, testConfig)
+	if err != nil {
+		t.Errorf("Error when storing classes: %s", err)
+	}
+
+	// Store the UserGymClasses
+	storeUserClassTests := []storeUserClassTest{
+		{"123", testClasses[0]},
+		{"123", testClasses[1]},
+		{"123", testClasses[2]},
+		{"123", testClasses[3]},
+		{"456", testClasses[4]},
+	}
+	for _, test := range storeUserClassTests {
+		err := StoreUserClass(test.user, test.class.UUID, testConfig)
+		if err != nil {
+			t.Errorf("Error when storing user classes: %s", err)
+
+		}
+	}
+	// Query Classes
 	queryUserClassTests := []queryUserClassTest{
 		{"123", 4},
 		{"456", 1},
@@ -453,7 +524,13 @@ func TestQueryUserPreferences(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create database %s", err)
 	}
+	// Clear the DB
+	err = clearDB(testConfig)
+	if err != nil {
+		t.Errorf("Failed to clear database %s", err)
+	}
 	defer testConfig.DB.Close()
+
 	queryUserPreferencesTests := []queryUserPreferencesTest{
 		{
 			"123",
@@ -463,6 +540,27 @@ func TestQueryUserPreferences(t *testing.T) {
 				PreferredTime:  now.Hour(),
 				PreferredDay:   int(now.Weekday())},
 		},
+	}
+	// Store the GymClasess
+	err = StoreClasses(testClasses, testConfig)
+	if err != nil {
+		t.Errorf("Error when storing classes: %s", err)
+	}
+
+	// Store the UserGymClasses
+	storeUserClassTests := []storeUserClassTest{
+		{"123", testClasses[0]},
+		{"123", testClasses[1]},
+		{"123", testClasses[2]},
+		{"123", testClasses[3]},
+		{"456", testClasses[4]},
+	}
+	for _, test := range storeUserClassTests {
+		err := StoreUserClass(test.user, test.class.UUID, testConfig)
+		if err != nil {
+			t.Errorf("Error when storing user classes: %s", err)
+
+		}
 	}
 
 	for _, test := range queryUserPreferencesTests {
@@ -485,8 +583,34 @@ func TestQueryPreferredClassesTest(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create database %s", err)
 	}
+	// Clear the DB
+	err = clearDB(testConfig)
+	if err != nil {
+		t.Errorf("Failed to clear database %s", err)
+	}
 	defer testConfig.DB.Close()
 
+	// Store the GymClasess
+	err = StoreClasses(testClasses, testConfig)
+	if err != nil {
+		t.Errorf("Error when storing classes: %s", err)
+	}
+
+	// Store the UserGymClasses
+	storeUserClassTests := []storeUserClassTest{
+		{"123", testClasses[0]},
+		{"123", testClasses[1]},
+		{"123", testClasses[2]},
+		{"123", testClasses[3]},
+		{"456", testClasses[4]},
+	}
+	for _, test := range storeUserClassTests {
+		err := StoreUserClass(test.user, test.class.UUID, testConfig)
+		if err != nil {
+			t.Errorf("Error when storing user classes: %s", err)
+
+		}
+	}
 	var queryPreferredClassesTests = []queryPreferredClassesTest{
 		{
 			UserPreference{
@@ -519,7 +643,35 @@ func TestQueryUserStatistics(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create database %s", err)
 	}
+	// Clear the DB
+	err = clearDB(testConfig)
+	if err != nil {
+		t.Errorf("Failed to clear database %s", err)
+	}
 	defer testConfig.DB.Close()
+
+	// Store the GymClasess
+	err = StoreClasses(testClasses, testConfig)
+	if err != nil {
+		t.Errorf("Error when storing classes: %s", err)
+	}
+
+	// Store the UserGymClasses
+	storeUserClassTests := []storeUserClassTest{
+		{"123", testClasses[0]},
+		{"123", testClasses[1]},
+		{"123", testClasses[2]},
+		{"123", testClasses[3]},
+		{"456", testClasses[4]},
+	}
+	for _, test := range storeUserClassTests {
+		err := StoreUserClass(test.user, test.class.UUID, testConfig)
+		if err != nil {
+			t.Errorf("Error when storing user classes: %s", err)
+
+		}
+	}
+
 	city := GetGymByName("city")
 	_, week := now.ISOWeek()
 	queryUserStatistics := []queryUserStatisticsTest{
@@ -569,26 +721,82 @@ func TestDeleteUserClass(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create database %s", err)
 	}
+	// Clear the DB
+	err = clearDB(testConfig)
+	if err != nil {
+		t.Errorf("Failed to clear database %s", err)
+	}
+	// Store the GymClasess
+	err = StoreClasses(testClasses, testConfig)
+	if err != nil {
+		t.Errorf("Error when storing classes: %s", err)
+	}
 
-	allClasses, _ := QueryClasses(GymQuery{
-		Gym: []Gym{
-			Gym{"city", "96382586-e31c-df11-9eaa-0050568522bb"},
-		},
-		Class:  nil,
-		Before: time.Date(2099, 01, 01, 01, 01, 01, 01, time.UTC),
-		After:  time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)},
-		testConfig)
+	// Store the UserGymClasses
+	storeUserClassTests := []storeUserClassTest{
+		{"123", testClasses[0]},
+		{"123", testClasses[1]},
+		{"123", testClasses[2]},
+		{"123", testClasses[3]},
+		{"456", testClasses[4]},
+	}
+	for _, test := range storeUserClassTests {
+		err := StoreUserClass(test.user, test.class.UUID, testConfig)
+		if err != nil {
+			t.Errorf("Error when storing user classes: %s", err)
+
+		}
+	}
 
 	deleteUserClassTests := []deleteUserClassTest{
-		{"123", allClasses[0]},
-		{"123", allClasses[1]},
-		{"123", allClasses[2]},
-		{"123", allClasses[3]},
-		{"456", allClasses[4]},
+		{"123", testClasses[0]},
+		{"123", testClasses[1]},
+		{"123", testClasses[2]},
+		{"123", testClasses[3]},
+		{"456", testClasses[4]},
 	}
 	for _, test := range deleteUserClassTests {
 		err := DeleteUserClass(test.user, test.class.UUID, testConfig)
 		assert.NoError(t, err, "Error when deleting user classes")
 	}
 	_ = os.Remove("gym.db")
+}
+
+// TODO: Add more test cases
+func TestDeleteClass(t *testing.T) {
+	classes := testClasses
+
+	copy(classes, testClasses)
+	ok := classes.Delete(testClasses[1].UUID)
+	if !ok {
+		t.Errorf("Failed to delete class")
+	}
+	assert.Equal(t, len(testClasses)-1, len(classes), "Failed to remove class")
+}
+
+type testExistsClassTest struct {
+	classes GymClasses
+	class   GymClass
+	exists  bool
+}
+
+func TestExistsClass(t *testing.T) {
+	testExistsClassTests := []testExistsClassTest{
+		{
+			testClasses,
+			testClasses[0],
+			true,
+		},
+		{
+			testClasses,
+			GymClass{},
+			false,
+		},
+	}
+
+	for _, test := range testExistsClassTests {
+		exists := test.classes.Exists(test.class)
+		assert.Equal(t, test.exists, exists, "Did not get expected existence")
+	}
+
 }

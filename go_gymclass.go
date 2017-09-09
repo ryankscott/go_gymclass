@@ -2,73 +2,20 @@ package lm
 
 import (
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/boltdb/bolt"
-
 	"github.com/PuloV/ics-golang"
 	log "github.com/Sirupsen/logrus"
+	"github.com/asdine/storm"
+	"github.com/boltdb/bolt"
 	"github.com/jsgoecke/go-wit"
 )
-
-// Config is used to store DB configuration for storing data
-type Config struct {
-	DBPath string
-	DB     *bolt.DB
-}
-
-// NewConfig returns a new configuration with defaults
-func NewConfig() (*Config, error) {
-	c := &Config{}
-	c.DBPath = "./gym.db"
-	dbb, err := bolt.Open(c.DBPath, 0600, &bolt.Options{Timeout: 5 * time.Second})
-	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Failed to open database")
-		return c, err
-	}
-
-	// Create classes bucket
-	err = dbb.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("Classes"))
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Failed to create bucket for classes")
-		return c, fmt.Errorf("Failed to create bucket for classes: %s", err)
-	}
-
-	// Create user classes bucket
-	err = dbb.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("UserClasses"))
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Failed to create bucket for user classes")
-		return c, fmt.Errorf("Failed to create bucket for user classes: %s", err)
-	}
-
-	c.DB = dbb
-
-	return c, nil
-}
-
-// Gym provides a mapping between a gym's name and their unique ID
-type Gym struct {
-	Name string
-	ID   string
-}
 
 // Gyms provides a mapping of all the gyms that are available
 var Gyms = []Gym{
@@ -83,51 +30,137 @@ var Classes = []string{
 // TODO: IMPLEMENT ME
 }
 
+// Config is used to store DB configuration for storing data
+type Config struct {
+	DBPath string
+	DB     *storm.DB
+}
+
+// Gym provides a mapping between a gym's name and their unique ID
+type Gym struct {
+	Name string
+	ID   string
+}
+
 // GymClass describes a class at Les Mills
 type GymClass struct {
-	UUID           string    `json:"uuid" db:"uuid"`
-	Gym            string    `json:"gym" db:"gym"`
-	Name           string    `json:"name" db:"name"`
-	Location       string    `json:"location" db:"location"`
-	StartDateTime  time.Time `json:"startdatetime" db:"start_datetime"`
-	EndDateTime    time.Time `json:"enddatetime" db:"end_datetime"`
-	InsertDateTime time.Time `json:"insertdatetime" db:"insert_datetime"`
+	UUID           string    `json:"uuid" db:"uuid" storm:"id"`
+	Gym            string    `json:"gym" db:"gym" storm:"index"`
+	Name           string    `json:"name" db:"name" storm:"index"`
+	Location       string    `json:"location" db:"location" storm:"index"`
+	StartDateTime  time.Time `json:"startdatetime" db:"start_datetime" storm:"index"`
+	EndDateTime    time.Time `json:"enddatetime" db:"end_datetime" storm:"index"`
+	InsertDateTime time.Time `json:"insertdatetime" db:"insert_datetime" storm:"index"`
+}
+
+// User desribes a person using a gym
+type User struct {
+	ID          string    `json:"sub" db:"id" storm:"id"`
+	Name        string    `json:"name" db:"full_name"`
+	FirstName   string    `json:"given_name" db:"first_name"`
+	LastName    string    `json:"family_name" db:"last_name"`
+	NickName    string    `json:"nickname" db:"nickname"`
+	Gender      string    `json:"gender" db:"gender"`
+	Email       string    `json:"email" db:"email"`
+	Verified    bool      `json:"verified" db:"verified"`
+	Locale      string    `json:"locale" db:"locale"`
+	LastUpdated time.Time `json:"updated_at" db:"last_updated"`
+}
+
+// UserGymClass describes a user and all their associated classes
+type UserGymClass struct {
+	UserID  string     `storm:"id"`
+	Classes GymClasses `storm:"index"`
+}
+
+// GymPreference describes a preference to go to a particular Gym. The preference should be a value between 0 - 1
+type GymPreference struct {
+	Gym        Gym     `json:"gym"`
+	Preference float64 `json:"preference"`
+}
+
+// ClassPreference describes a preference to go to a particular class. The preference should be a value between 0 - 1
+type ClassPreference struct {
+	Class      string  `json:"class"`
+	Preference float64 `json:"preference"`
+}
+
+// WorkOutFrequency describes the number of times a user went to any gym class on a particular week
+type WorkOutFrequency struct {
+	Week  int `json:"week"`
+	Count int `json:"count"`
+}
+
+//ClassFrequency describes the number of times a user went to a particular class on a particular week
+
+// UserStatistics describes the different statistics about a user
+type UserStatistics struct {
+	TotalClasses     int                `json:"totalClasses"`
+	ClassesPerWeek   float64            `json:"classesPerWeek"`
+	LastClassDate    time.Time          `json:"lastClassDate"`
+	GymPreferences   []GymPreference    `json:"gymPreferences"`
+	ClassPreferences []ClassPreference  `json:"classPreferences"`
+	WorkOutFrequency []WorkOutFrequency `json:"workOutFrequency"`
+}
+
+// UserPreference describes a users preferences when going to the gym
+type UserPreference struct {
+	User           string `json:"user" db:"user"`
+	PreferredGym   string `json:"preferredGym" db:"preferred_gym"`
+	PreferredClass string `json:"preferredClass" db:"preferred_class"`
+	PreferredTime  int    `json:"preferredTime" db:"preferred_time"`
+	PreferredDay   int    `json:"preferredDay" db:"preferred_day"`
+}
+
+// GymQuery describes a query for GymClasses
+type GymQuery struct {
+	Gym    []Gym
+	Class  []string
+	Before time.Time
+	After  time.Time
+}
+
+// ByStartDateTime implements sort.Interface for GymClasses based on the StartDateTime
+type ByStartDateTime GymClasses
+
+// GymClasses describes a collection of GymClass
+type GymClasses []GymClass
+
+// NewConfig returns a new configuration with defaults
+func NewConfig() (*Config, error) {
+	c := &Config{}
+	c.DBPath = "gym.db"
+	dbb, err := storm.Open(c.DBPath, storm.BoltOptions(0600, &bolt.Options{Timeout: 5 * time.Second}))
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Failed to open database")
+		return c, err
+	}
+	c.DB = dbb
+	return c, nil
 }
 
 // InQuery checks to see if the class is within the criteria of the GymQuery
 // Returns true if it meets the critieria otherwise returns false
 func (g GymClass) InQuery(q GymQuery) bool {
-	inName := compareClassName(&q, &g)
-	if !inName {
-		return false
-	}
-
-	inGym := compareClassGym(&q, &g)
-	if !inGym {
-		return false
-	}
-
-	after := compareClassAfterTime(&q, &g)
-	if !after {
-		return false
-	}
-
-	before := compareClassBeforeTime(&q, &g)
-	if !before {
-		return false
-	}
-	return true
+	return compareClassName(&q, &g) && compareClassGym(&q, &g) && compareClassAfterTime(&q, &g) && compareClassBeforeTime(&q, &g)
 }
-
-// GymClasses describes a collection of GymClass
-type GymClasses []GymClass
 
 // Delete will remove a GymClass from the GymClasses slice by UUID
 // It will returna boolean representing the success of the operation
-func (g GymClasses) Delete(classID string) bool {
-	for i, v := range g {
+func (g *GymClasses) Delete(classID string) bool {
+	for i, v := range *g {
 		if v.UUID == classID {
-			g = append(g[:i], g[i+1:]...)
+			*g = append((*g)[:i], (*g)[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// Exists checks to see if a GymClass is contained within the GymClasses slice
+func (g GymClasses) Exists(c GymClass) bool {
+	for _, v := range g {
+		if c == v {
 			return true
 		}
 	}
@@ -173,7 +206,11 @@ func (g GymClasses) PerWeek() float64 {
 
 	duration := lc.StartDateTime.Sub(oc.StartDateTime)
 	d := (duration.Hours()) / 24.0
+	if math.IsNaN(t/d) || math.IsInf(t/d, 0) {
+		return 0.0
+	}
 	return t / d
+
 }
 
 // ClassPreferences breaks down the classes by their percentage of all classes
@@ -302,62 +339,6 @@ func (g GymClasses) MostFrequentedTime() int {
 	return hour
 }
 
-// GymPreference describes a preference to go to a particular Gym. The preference should be a value between 0 - 1
-type GymPreference struct {
-	Gym        Gym     `json:"gym"`
-	Preference float64 `json:"preference"`
-}
-
-// ClassPreference describes a preference to go to a particular class. The preference should be a value between 0 - 1
-type ClassPreference struct {
-	Class      string  `json:"class"`
-	Preference float64 `json:"preference"`
-}
-
-// WorkOutFrequency describes the number of times a user went to any gym class on a particular week
-type WorkOutFrequency struct {
-	Week  int `json:"week"`
-	Count int `json:"count"`
-}
-
-//ClassFrequency describes the number of times a user went to a particular class on a particular week
-
-// UserStatistics describes the different statistics about a user
-type UserStatistics struct {
-	TotalClasses     int                `json:"totalClasses"`
-	ClassesPerWeek   float64            `json:"classesPerWeek"`
-	LastClassDate    time.Time          `json:"lastClassDate"`
-	GymPreferences   []GymPreference    `json:"gymPreferences"`
-	ClassPreferences []ClassPreference  `json:"classPreferences"`
-	WorkOutFrequency []WorkOutFrequency `json:"workOutFrequency"`
-}
-
-// UserPreference describes a users preferences when going to the gym
-type UserPreference struct {
-	User           string `json:"user" db:"user"`
-	PreferredGym   string `json:"preferredGym" db:"preferred_gym"`
-	PreferredClass string `json:"preferredClass" db:"preferred_class"`
-	PreferredTime  int    `json:"preferredTime" db:"preferred_time"`
-	PreferredDay   int    `json:"preferredDay" db:"preferred_day"`
-}
-
-// UserGymClass describes a saved GymClass by a user
-type UserGymClass struct {
-	User       string `json:"user" db:"user"`
-	GymClassID string `json:"gymClassUUID" db:"gymclass_uiid"`
-}
-
-// GymQuery describes a query for GymClasses
-type GymQuery struct {
-	Gym    []Gym
-	Class  []string
-	Before time.Time
-	After  time.Time
-}
-
-// ByStartDateTime implements sort.Interface for GymClasses based on the StartDateTime
-type ByStartDateTime GymClasses
-
 func (a ByStartDateTime) Len() int           { return len(a) }
 func (a ByStartDateTime) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByStartDateTime) Less(i, j int) bool { return a[i].StartDateTime.Before(a[j].StartDateTime) }
@@ -465,26 +446,12 @@ func GetClasses(gyms []Gym) (GymClasses, error) {
 func StoreClasses(classes GymClasses, dbConfig *Config) error {
 	stdClasses := 0
 	for _, class := range classes {
-		c, err := json.Marshal(class)
-		if err != nil {
-			log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to marshall class to JSON for storage")
-			return err
-		}
-		err = dbConfig.DB.Update(func(tx *bolt.Tx) error {
-			b := tx.Bucket([]byte("Classes"))
-			err := b.Put([]byte(class.UUID), c)
-			if err != nil {
-				log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to store class into db")
-				return err
-			}
-			return nil
-		})
+		err := dbConfig.DB.Save(&class)
 		if err != nil {
 			log.WithFields(log.Fields{"error": err, "row": class}).Error("Failed to insert class into db")
 			return err
 		}
 		stdClasses++
-
 	}
 	log.Infof("Stored %d classes", stdClasses)
 	return nil
@@ -508,26 +475,41 @@ func QueryUserStatistics(user string, dbConfig *Config) (UserStatistics, error) 
 	return us, nil
 }
 
+// StoreUser saves a user to the database
+func StoreUser(user User, dbConfig *Config) error {
+	err := dbConfig.DB.Save(&user)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "row": user}).Error("Failed to insert user into db")
+		return err
+	}
+	log.Infof("Stored user with ID: %s", user.ID)
+	return nil
+}
+
+// QueryUsers returns all users in the database
+func QueryUsers(dbConfig *Config) ([]User, error) {
+	var users []User
+	err := dbConfig.DB.All(&users)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Failed to get all users")
+		return []User{}, err
+	}
+	return users, nil
+}
+
 // QueryUserClasses will return a list of classes that a particular user has saved
 func QueryUserClasses(user string, dbConfig *Config) (GymClasses, error) {
-	allClasses := make(GymClasses, 0)
-	err := dbConfig.DB.View(func(tx *bolt.Tx) error {
-		// Assume bucket exists and has keys
-		b := tx.Bucket([]byte("UserClasses"))
-		v := b.Get([]byte(user))
-		if v != nil {
-			err := json.Unmarshal(v, &allClasses)
-			if err != nil {
-				log.WithFields(log.Fields{"error": err}).Error("Failed to unmarshal stored class when getting classes")
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Failed to get classes")
+
+	var u UserGymClass
+	err := dbConfig.DB.One("UserID", user, &u)
+	if err == storm.ErrNotFound {
+		return GymClasses{}, nil
+	} else if err != nil {
+		log.WithFields(log.Fields{"error": err}).Error("Failed to get user classes")
 		return GymClasses{}, err
 	}
+
+	allClasses := u.Classes
 	log.Infof("Returning %d gym classes", len(allClasses))
 	sort.Sort(ByStartDateTime(allClasses))
 
@@ -609,96 +591,65 @@ func QueryPreferredClasses(preference UserPreference, dbConfig *Config) (GymClas
 
 // StoreUserClass will store a class against a user in the database
 func StoreUserClass(user string, classID string, dbConfig *Config) error {
-	// Bolt DB get class from ID
+	// Get class from ID
 	var c GymClass
-	err := dbConfig.DB.View(func(tx *bolt.Tx) error {
-		// Assume bucket exists and has keys
-		b := tx.Bucket([]byte("Classes"))
-		v := b.Get([]byte(classID))
-		err := json.Unmarshal(v, &c)
-		if err != nil {
-			log.WithFields(log.Fields{"error": err}).Error("Failed to unmarshal stored class when getting classes")
-			fmt.Printf("Failed class is: %s \n", v)
-			return err
-		}
-		return nil
-	})
+	err := dbConfig.DB.One("UUID", classID, &c)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to find class from bolt db")
 		return err
 	}
 
-	// Bolt DB insert query
-	err = dbConfig.DB.Update(func(tx *bolt.Tx) error {
-		var userClasses GymClasses
-		b := tx.Bucket([]byte("UserClasses"))
-		// Get all classes for the user
-		v := b.Get([]byte(user))
-		if v != nil {
-			err := json.Unmarshal(v, &userClasses)
-			if err != nil {
-				log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to unmarshal classes from bolt db when inserting")
-				return err
-			}
-		} // Add the new class
-		userClasses = append(userClasses, c)
-		j, err := json.Marshal(userClasses)
+	var u UserGymClass
+	err = dbConfig.DB.One("UserID", user, &u)
+	// If the user doesn't exist then create
+	if err == storm.ErrNotFound {
+		u.UserID = user
+		u.Classes = []GymClass{c}
+		err = dbConfig.DB.Save(&u)
 		if err != nil {
-			log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to marshal classes into bolt db")
+			log.WithFields(log.Fields{"error": err, "user": user}).Error("Failed to save new user")
 			return err
 		}
-		// Store the classes
-		err = b.Put([]byte(user), j)
-		if err != nil {
-			log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to store user classes in bolt db")
-			return err
-		}
-		return err
-	})
-	if err != nil {
-		log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to insert row into bolt db")
+		return nil
+	} else if err != nil {
+		log.WithFields(log.Fields{"error": err, "user": user}).Error("Failed to find classes for user")
 		return err
 	}
+	// Update the classes for the user
+	allC := u.Classes
+	// If it already exists don't add it again
+	if allC.Exists(c) {
+		log.WithFields(log.Fields{"class": c.UUID, "user": user}).Info("Class already exists for user")
+		return nil
+	}
 
+	err = dbConfig.DB.UpdateField(&UserGymClass{UserID: user}, "Classes", append(u.Classes, c))
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "class": classID, "user": user}).Error("Failed to store user classes")
+		return err
+	}
 	return nil
 }
 
 // DeleteUserClass will delete a class for a particular user in the database
 func DeleteUserClass(user string, classID string, dbConfig *Config) error {
-	// Bolt DB delete query
-	err := dbConfig.DB.Update(func(tx *bolt.Tx) error {
-		var userClasses GymClasses
-		b := tx.Bucket([]byte("UserClasses"))
-		v := b.Get([]byte(user))
-		err := json.Unmarshal(v, &userClasses)
-		if err != nil {
-			log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to unmarshal classes from bolt db")
-			return err
-		}
-		// Remove class now
-		ok := userClasses.Delete(classID)
-		if !ok {
-			log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to remove class from slice of classes")
-			return fmt.Errorf("Failed to remove class from slice of classes")
-
-		}
-		j, err := json.Marshal(userClasses)
-		if err != nil {
-			log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to marshal classes into bolt db")
-			return err
-		}
-		err = b.Put([]byte(user), j)
-		if err != nil {
-			log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to store user classes in bolt db")
-			return err
-		}
-		return err
-	})
+	// Get the User
+	var u UserGymClass
+	err := dbConfig.DB.One("UserID", user, &u)
 	if err != nil {
-		log.WithFields(log.Fields{"error": err, "class": classID}).Error("Failed to insert row into bolt db")
+		log.WithFields(log.Fields{"error": err, "user": user}).Error("Failed to find user when deleting UserGymClass")
 		return err
 	}
 
+	// Remove the unwanted class from the current classes
+	allClasses := u.Classes
+	allClasses.Delete(classID)
+	// Update the UserGymClass
+	err = dbConfig.DB.Update(&UserGymClass{UserID: user, Classes: allClasses})
+	if err != nil {
+		log.WithFields(log.Fields{"error": err, "user": user}).Error("Failed to update user when deleting UserGymClass")
+		return err
+	}
 	return nil
 }
 
@@ -722,10 +673,11 @@ func QueryClassesByName(query string, dbConfig *Config) (GymQuery, error) {
 
 	var gymQuery GymQuery
 	if len(result.Outcomes) >= 1 {
+
 		outcome := result.Outcomes[0]
-		class := outcome.Entities["agenda_entry"]
+		class := outcome.Entities["gym_classname"]
 		datetime := outcome.Entities["datetime"]
-		location := outcome.Entities["location"]
+		location := outcome.Entities["gym_location"]
 
 		// Parse Gyms
 		if len(location) >= 1 {
@@ -832,32 +784,16 @@ func QueryClassesByName(query string, dbConfig *Config) (GymQuery, error) {
 // QueryClasses will query the classes from the stored database and return the results
 func QueryClasses(query GymQuery, dbConfig *Config) (GymClasses, error) {
 	allClasses := make(GymClasses, 0)
-	err := dbConfig.DB.View(func(tx *bolt.Tx) error {
-		// Assume bucket exists and has keys
-		b := tx.Bucket([]byte("Classes"))
-		err := b.ForEach(func(k, v []byte) error {
-			var c GymClass
-			err := json.Unmarshal(v, &c)
-			if err != nil {
-				log.WithFields(log.Fields{"error": err}).Error("Failed to unmarshal stored class when getting classes")
-				return err
-			}
-			if c.InQuery(query) {
-				allClasses = append(allClasses, c)
-			}
-
-			return nil
-		})
-		if err != nil {
-			log.WithFields(log.Fields{"error": err}).Error("Failed to iterate over stored classes")
-			return err
-		}
-		return nil
-	})
+	var gc GymClasses
+	err := dbConfig.DB.All(&gc)
 	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Failed to get stored classes")
+		log.WithFields(log.Fields{"error": err}).Error("Failed to get all stored classes")
 		return GymClasses{}, err
-
+	}
+	for _, c := range gc {
+		if c.InQuery(query) {
+			allClasses = append(allClasses, c)
+		}
 	}
 
 	log.Infof("Returning %d gym classes", len(allClasses))
