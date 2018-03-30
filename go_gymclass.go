@@ -13,7 +13,6 @@ import (
 	"github.com/PuloV/ics-golang"
 	log "github.com/Sirupsen/logrus"
 	"github.com/asdine/storm"
-	"github.com/boltdb/bolt"
 	"github.com/jsgoecke/go-wit"
 )
 
@@ -27,7 +26,7 @@ var Gyms = []Gym{
 
 // Classes provides a list of all the support classes
 var Classes = []string{
-// TODO: IMPLEMENT ME
+	// TODO: IMPLEMENT ME
 }
 
 // Config is used to store DB configuration for storing data
@@ -130,7 +129,7 @@ type GymClasses []GymClass
 func NewConfig() (*Config, error) {
 	c := &Config{}
 	c.DBPath = "gym.db"
-	dbb, err := storm.Open(c.DBPath, storm.BoltOptions(0600, &bolt.Options{Timeout: 5 * time.Second}))
+	dbb, err := storm.Open(c.DBPath)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to open database")
 		return c, err
@@ -265,7 +264,7 @@ func (g GymClasses) WeeklyCount() []WorkOutFrequency {
 	return c
 }
 
-//MostFrequentedDay returns the weekday which contains the most number of classes
+// MostFrequentedDay returns the weekday which contains the most number of classes
 func (g GymClasses) MostFrequentedDay() int {
 	// Map of weekday to count
 	w := make(map[int]int)
@@ -284,7 +283,7 @@ func (g GymClasses) MostFrequentedDay() int {
 	return day
 }
 
-//MostFrequentedClass returns the class type which has the most number of visits
+// MostFrequentedClass returns the class type which has the most number of visits
 func (g GymClasses) MostFrequentedClass() string {
 	// Map of class to count
 	m := make(map[string]int)
@@ -302,7 +301,7 @@ func (g GymClasses) MostFrequentedClass() string {
 	return class
 }
 
-//MostFrequentedGym returns the gym which has the most number of visits
+// MostFrequentedGym returns the gym which has the most number of visits
 func (g GymClasses) MostFrequentedGym() string {
 	// Map of class to count
 	m := make(map[string]int)
@@ -320,7 +319,7 @@ func (g GymClasses) MostFrequentedGym() string {
 	return gym
 }
 
-//MostFrequentedTime returns the hour which has the most number of visits
+// MostFrequentedTime returns the hour which has the most number of visits
 func (g GymClasses) MostFrequentedTime() int {
 	// Map of class to count
 	m := make(map[int]int)
@@ -695,16 +694,7 @@ func QueryClassesByName(query string, dbConfig *Config) (GymQuery, error) {
 			for _, v := range class {
 				// Save the class as a string
 				cls := fmt.Sprintf("%v", *v.Value)
-				// Split the class name for example "CX WORX" becomes ["CX","WORX"]
-				cla := strings.Split(cls, " ")
-				if len(cla) > 0 {
-					log.Infof("Found multiple classes %s", cla)
-					// Take the first part of the string e.g. "CX"
-					gymQuery.Class = append(gymQuery.Class, cla[0])
-				} else {
-					gymQuery.Class = append(gymQuery.Class, cls)
-				}
-
+				gymQuery.Class = append(gymQuery.Class, cls)
 			}
 		} else {
 			gymQuery.Class = []string{}
